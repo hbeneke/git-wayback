@@ -10,7 +10,12 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "clean": "turbo clean && rm -rf node_modules",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "sync": "node scripts/sync-master.mjs",
+    "sync:minor": "node scripts/sync-master.mjs --minor",
+    "sync:patch": "node scripts/sync-master.mjs --patch",
+    "sync:no-tag": "node scripts/sync-master.mjs --no-tag",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

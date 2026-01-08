@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Skip if merge in progress
+if [ -f ".git/MERGE_HEAD" ]; then
+    echo "Merge in progress. Skipping pre-commit version bump."
+    exit 0
+fi
+
+# Skip if SKIP_VERSION_BUMP is set
+if [ "$SKIP_VERSION_BUMP" = "1" ]; then
+    exit 0
+fi
+
+# Skip version-related commits
+COMMIT_MSG_FILE=".git/COMMIT_EDITMSG"
+if [ -f "$COMMIT_MSG_FILE" ]; then
+    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE" 2>/dev/null || echo "")
+    if [[ "$COMMIT_MSG" == *"bump version"* ]] || [[ "$COMMIT_MSG" == *"sync version"* ]]; then
+        echo "Version-related commit. Skipping pre-commit version bump."
+        exit 0
+    fi
+fi
+
+if [ ! -f "package.json" ]; then
+    exit 0
+fi
+
+# Check if only markdown files changed
+STAGED_FILES=$(git diff --cached --name-only)
+NON_MD_FILES=$(echo "$STAGED_FILES" | grep -v '\.md$')
+
+if [ -z "$NON_MD_FILES" ]; then
+    echo "Only markdown files modified. Version not updated."
+    exit 0
+fi
+
+# Get current version
+current_version=$(node -p "require('./package.json').version")
+
+if [ -z "$current_version" ]; then
+    echo "Could not read version from package.json"
+    exit 1
+fi
+
+# Bump patch version
+IFS='.' read -r major minor patch <<< "$current_version"
+new_patch=$((patch + 1))
+new_version="$major.$minor.$new_patch"
+
+# Update package.json
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/\"version\": \"$current_version\"/\"version\": \"$new_version\"/" package.json
+else
+    sed -i "s/\"version\": \"$current_version\"/\"version\": \"$new_version\"/" package.json
+fi
+
+git add package.json
+
+echo "Version updated: $current_version -> $new_version"
+
+exit 0
