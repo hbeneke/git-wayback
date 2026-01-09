@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Skip if SKIP_VERSION_BUMP is set
+if [ "$SKIP_VERSION_BUMP" = "1" ]; then
+    echo "Skipping version bump (SKIP_VERSION_BUMP flag set)"
+    exit 0
+fi
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+MERGED_BRANCH=$(git reflog -1 | grep -o "merge .*:" | cut -d' ' -f2 | cut -d':' -f1)
+
+if [ "$BRANCH" = "master" ] && [ "$MERGED_BRANCH" = "develop" ]; then
+    if [ -f "package.json" ]; then
+        # Check if only markdown files changed
+        CHANGED_FILES=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD)
+        NON_MD_FILES=$(echo "$CHANGED_FILES" | grep -v '\.md$')
+        
+        if [ -z "$NON_MD_FILES" ]; then
+            echo "Only markdown files changed. Skipping version bump."
+            exit 0
+        fi
+        
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        
+        # Default to minor bump, can be overridden with VERSION_BUMP_TYPE=patch
+        BUMP_TYPE="${VERSION_BUMP_TYPE:-minor}"
+        
+        MAJOR=$(echo $CURRENT_VERSION | cut -d'.' -f1)
+        MINOR=$(echo $CURRENT_VERSION | cut -d'.' -f2)
+        PATCH=$(echo $CURRENT_VERSION | cut -d'.' -f3)
+        
+        if [ "$BUMP_TYPE" = "patch" ]; then
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+        else
+            NEW_MINOR=$((MINOR + 1))
+            NEW_VERSION="$MAJOR.$NEW_MINOR.0"
+        fi
+        
+        # Update version in package.json
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+        else
+            sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" package.json
+        fi
+        
+        git add package.json
+        git commit -m "chore: bump version to $NEW_VERSION"
+        
+        # Generate changelog from previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -n "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+        fi
+        
+        # Create tag with changelog
+        TAG_MESSAGE="Release version $NEW_VERSION
+
+Changelog:
+$CHANGELOG"
+        
+        git tag -a "v$NEW_VERSION" -m "$TAG_MESSAGE"
+        
+        echo "Version bumped: $CURRENT_VERSION -> $NEW_VERSION"
+        echo "Tag v$NEW_VERSION created with changelog"
+        
+        # Sync version back to develop
+        echo "Syncing version to develop..."
+        git checkout develop
+        
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+        else
+            sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+        fi
+        
+        git add package.json
+        git commit -m "chore: sync version to $NEW_VERSION from master"
+        
+        echo "Version synced to develop"
+        
+        # Return to master
+        git checkout master
+    fi
+fi
