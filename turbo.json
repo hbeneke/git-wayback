@@ -1,9 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "POSTGRES_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".nuxt/**", "dist/**", ".output/**"]
+      "outputs": [".nuxt/**", "dist/**", ".output/**", ".vercel/output/**"]
     },
     "dev": {
       "cache": false,
