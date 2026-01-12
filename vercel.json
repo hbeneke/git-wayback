@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm turbo build --filter=@git-wayback/web",
+  "installCommand": "pnpm install",
+  "framework": "nuxtjs",
+  "outputDirectory": "apps/web/.output"
+}
