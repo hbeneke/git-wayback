@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, jsonb, pgEnum } from 'drizzle-orm/pg-core'
+import { integer, jsonb, pgEnum, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 
 export const analysisStatusEnum = pgEnum('analysis_status', [
   'pending',

@@ -1,6 +1,6 @@
-import { simpleGit, SimpleGit } from 'simple-git'
-import path from 'node:path'
 import fs from 'node:fs/promises'
+import path from 'node:path'
+import { type SimpleGit, simpleGit } from 'simple-git'
 
 const REPOS_DIR = process.env.REPOS_DIR || '.repos'
 

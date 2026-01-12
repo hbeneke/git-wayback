@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, primaryKey } from 'drizzle-orm/pg-core'
+import { boolean, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import { repositories } from './repositories'
 
 export const branches = pgTable(
@@ -13,7 +13,7 @@ export const branches = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.repositoryId, table.name] })]
+  (table) => [primaryKey({ columns: [table.repositoryId, table.name] })],
 )
 
 export type Branch = typeof branches.$inferSelect
