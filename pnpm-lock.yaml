@@ -15,33 +15,11 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
-  apps/api:
+  apps/web:
     dependencies:
       '@git-wayback/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@git-wayback/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@hono/node-server':
-        specifier: ^1.13.7
-        version: 1.19.8(hono@4.11.3)
-      hono:
-        specifier: ^4.6.16
-        version: 4.11.3
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.5
-        version: 22.19.3
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
-  apps/web:
-    dependencies:
       '@git-wayback/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -692,12 +670,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@hono/node-server@1.19.8':
-    resolution: {integrity: sha512-0/g2lIOPzX8f3vzW1ggQgvG5mjtFBDBHFAzI5SFAi2DzSqS9luJwqg9T6O/gKYLi+inS7eNxBeIFkkghIPvrMA==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: ^4
 
   '@ioredis/commands@1.5.0':
     resolution: {integrity: sha512-eUgLqrMf8nJkZxT24JvVRrQya1vZkQh8BBeYNwGDqa5I0VUi8ACx7uFvAaLxintokpTenkK6DASvo/bvNbBGow==}
@@ -2273,10 +2245,6 @@ packages:
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
-
-  hono@4.11.3:
-    resolution: {integrity: sha512-PmQi306+M/ct/m5s66Hrg+adPnkD5jiO6IjA7WhWw0gSBSo1EcRegwuI1deZ+wd5pzCGynCcn2DprnE4/yEV4w==}
-    engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
     resolution: {integrity: sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ==}
@@ -4154,10 +4122,6 @@ snapshots:
   '@esbuild/win32-x64@0.27.2':
     optional: true
 
-  '@hono/node-server@1.19.8(hono@4.11.3)':
-    dependencies:
-      hono: 4.11.3
-
   '@ioredis/commands@1.5.0': {}
 
   '@isaacs/balanced-match@4.0.1': {}
@@ -5814,8 +5778,6 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.11.3: {}
-
   hookable@5.5.3: {}
 
   http-errors@2.0.1:
@@ -7054,6 +7016,7 @@ snapshots:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   turbo-darwin-64@2.7.3:
     optional: true
