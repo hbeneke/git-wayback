@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core'
 import { repositories } from './repositories'
 
 export const commits = pgTable('commits', {
@@ -24,7 +24,7 @@ export const commitParents = pgTable(
       .references(() => commits.sha, { onDelete: 'cascade' }),
     parentSha: text('parent_sha').notNull(),
   },
-  (table) => [primaryKey({ columns: [table.commitSha, table.parentSha] })]
+  (table) => [primaryKey({ columns: [table.commitSha, table.parentSha] })],
 )
 
 export type Commit = typeof commits.$inferSelect

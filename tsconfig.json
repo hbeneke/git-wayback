@@ -12,10 +12,5 @@
     "declarationMap": true,
     "noEmit": true
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".nuxt",
-    ".output"
-  ]
+  "exclude": ["node_modules", "dist", ".nuxt", ".output"]
 }
