@@ -1,8 +1,8 @@
 <template>
   <main class="container">
     <header class="hero">
-      <h1>git-wayback</h1>
-      <p>Visualize the evolution of any GitHub repository.</p>
+      <h1 class="text-gradient">git-wayback</h1>
+      <p class="text-muted">Visualize the evolution of any GitHub repository.</p>
     </header>
 
     <div class="search-container">
@@ -43,6 +43,19 @@
 </template>
 
 <script setup lang="ts">
+// SEO Meta
+useSeoMeta({
+  title: 'git-wayback - Visualize GitHub Repository Evolution',
+  description:
+    'Explore and visualize the evolution of any GitHub repository. See commits, contributors, and how projects grow over time.',
+  ogTitle: 'git-wayback - Visualize GitHub Repository Evolution',
+  ogDescription:
+    'Explore and visualize the evolution of any GitHub repository. See commits, contributors, and how projects grow over time.',
+  twitterTitle: 'git-wayback - Visualize GitHub Repository Evolution',
+  twitterDescription:
+    'Explore and visualize the evolution of any GitHub repository. See commits, contributors, and how projects grow over time.',
+})
+
 interface SearchResult {
   id: number
   fullName: string
@@ -98,12 +111,6 @@ function formatNumber(num: number): string {
 </script>
 
 <style scoped>
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
 .hero {
   text-align: center;
   margin-bottom: 3rem;
@@ -112,14 +119,9 @@ function formatNumber(num: number): string {
 .hero h1 {
   font-size: 2.5rem;
   margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .hero p {
-  color: #666;
   font-size: 1.1rem;
 }
 
@@ -151,19 +153,13 @@ function formatNumber(num: number): string {
   position: absolute;
   right: 1rem;
   top: 50%;
-  transform: translateY(-50%);
+  translate: 0 -50%;
   width: 20px;
   height: 20px;
   border: 2px solid #e0e0e0;
   border-top-color: #667eea;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
-  }
 }
 
 .results-list {
