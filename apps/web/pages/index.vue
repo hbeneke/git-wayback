@@ -1,41 +1,61 @@
 <template>
-  <main class="container">
-    <header class="hero">
-      <h1 class="text-gradient">git-wayback</h1>
-      <p class="text-muted">Visualize the evolution of any GitHub repository.</p>
+  <main class="max-w-3xl mx-auto px-6 py-8">
+    <header class="text-center mb-12">
+      <h1 class="text-gradient text-4xl font-bold mb-2">git-wayback</h1>
+      <p class="text-gray-500 text-lg">Visualize the evolution of any GitHub repository.</p>
     </header>
 
-    <div class="search-container">
-      <div class="search-box">
+    <div class="w-full">
+      <div class="relative mb-4">
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search GitHub repositories... (e.g. vue, react, nuxt)"
-          class="search-input"
+          class="w-full px-5 py-4 text-base border-2 border-gray-200 rounded-xl outline-none transition-all focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10"
           @input="debouncedSearch"
         />
-        <div v-if="isLoading" class="search-spinner" />
+        <div
+          v-if="isLoading"
+          class="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 border-2 border-gray-200 border-t-brand-primary rounded-full animate-spin"
+        />
       </div>
 
-      <ul v-if="results.length > 0" class="results-list">
-        <li v-for="repo in results" :key="repo.id" class="result-item">
-          <NuxtLink :to="`/${repo.fullName}`" class="result-link">
-            <img :src="repo.owner.avatar" :alt="repo.owner.login" class="avatar" />
-            <div class="result-info">
-              <span class="repo-name">{{ repo.fullName }}</span>
-              <span v-if="repo.description" class="repo-description">
+      <ul v-if="results.length > 0" class="border border-gray-200 rounded-xl overflow-hidden">
+        <li
+          v-for="repo in results"
+          :key="repo.id"
+          class="border-b border-gray-200 last:border-b-0"
+        >
+          <NuxtLink
+            :to="`/${repo.fullName}`"
+            class="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
+          >
+            <img
+              :src="repo.owner.avatar"
+              :alt="repo.owner.login"
+              class="w-10 h-10 rounded-lg"
+            />
+            <div class="flex-1 min-w-0">
+              <span class="block font-semibold text-gray-800">{{ repo.fullName }}</span>
+              <span
+                v-if="repo.description"
+                class="block text-sm text-gray-500 truncate"
+              >
                 {{ repo.description }}
               </span>
             </div>
-            <div class="repo-stats">
-              <span class="stat">⭐ {{ formatNumber(repo.stars) }}</span>
-              <span class="stat">🍴 {{ formatNumber(repo.forks) }}</span>
+            <div class="flex gap-3 text-sm text-gray-500">
+              <span class="whitespace-nowrap">⭐ {{ formatNumber(repo.stars) }}</span>
+              <span class="whitespace-nowrap">🍴 {{ formatNumber(repo.forks) }}</span>
             </div>
           </NuxtLink>
         </li>
       </ul>
 
-      <p v-else-if="searchQuery && !isLoading && hasSearched" class="no-results">
+      <p
+        v-else-if="searchQuery && !isLoading && hasSearched"
+        class="text-center text-gray-500 py-8"
+      >
         No repositories found for "{{ searchQuery }}"
       </p>
     </div>
@@ -109,130 +129,3 @@ function formatNumber(num: number): string {
   return num.toString()
 }
 </script>
-
-<style scoped>
-.hero {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.hero h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.hero p {
-  font-size: 1.1rem;
-}
-
-.search-container {
-  width: 100%;
-}
-
-.search-box {
-  position: relative;
-  margin-bottom: 1rem;
-}
-
-.search-input {
-  width: 100%;
-  padding: 1rem 1.25rem;
-  font-size: 1rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.search-input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.search-spinner {
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  translate: 0 -50%;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e0e0e0;
-  border-top-color: #667eea;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.results-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.result-item {
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.result-item:last-child {
-  border-bottom: none;
-}
-
-.result-link {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  text-decoration: none;
-  color: inherit;
-  transition: background-color 0.2s;
-}
-
-.result-link:hover {
-  background-color: #f8f9fa;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-}
-
-.result-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.repo-name {
-  display: block;
-  font-weight: 600;
-  color: #333;
-}
-
-.repo-description {
-  display: block;
-  font-size: 0.875rem;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.repo-stats {
-  display: flex;
-  gap: 0.75rem;
-  font-size: 0.875rem;
-  color: #666;
-}
-
-.stat {
-  white-space: nowrap;
-}
-
-.no-results {
-  text-align: center;
-  color: #666;
-  padding: 2rem;
-}
-</style>

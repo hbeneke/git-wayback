@@ -1,57 +1,30 @@
-/* Reset básico */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #fafafa;
-  color: #1a1a1a;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Layout */
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-/* Tipografía */
-.text-gradient {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.text-muted {
-  color: #666;
-}
-
-/* Animaciones */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@layer components {
+  .text-gradient {
+    @apply bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent;
   }
 }
 
 /* Transiciones de página */
 .page-enter-active,
 .page-leave-active {
-  transition: opacity 0.15s ease;
+  @apply transition-opacity duration-150 ease-out;
 }
 
 .page-enter-from,
 .page-leave-to {
-  opacity: 0;
+  @apply opacity-0;
 }
