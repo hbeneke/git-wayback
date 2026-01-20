@@ -11,6 +11,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@git-wayback/core": "workspace:^",
     "@git-wayback/db": "workspace:*",
     "@git-wayback/shared": "workspace:*",
     "@nuxtjs/tailwindcss": "^6.14.0",

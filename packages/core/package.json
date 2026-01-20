@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@git-wayback/shared": "workspace:*",
+    "@vercel/blob": "^2.0.0",
+    "nanoid": "^5.1.6",
+    "puppeteer": "^24.35.0",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
