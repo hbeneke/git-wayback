@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { execSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const args = process.argv.slice(2)
 const noTag = args.includes('--no-tag')
@@ -144,10 +146,17 @@ if (!noTag) {
     changelog = execSilent('git log --pretty=format:"- %s (%h)" --no-merges -20')
   }
 
-  // Create tag
+  // Create tag using a temp file for the message (avoids shell escaping issues)
   const tagMessage = `Release version ${newVersion}\n\nChangelog:\n${changelog}`
-  execSync(`git tag -a "v${newVersion}" -m "${tagMessage}"`, { stdio: 'pipe' })
-  console.log(`Tag v${newVersion} created`)
+  const tempFile = join(tmpdir(), `git-wayback-tag-${Date.now()}.txt`)
+  writeFileSync(tempFile, tagMessage)
+  
+  try {
+    execSync(`git tag -a "v${newVersion}" -F "${tempFile}"`, { stdio: 'pipe' })
+    console.log(`Tag v${newVersion} created`)
+  } finally {
+    try { unlinkSync(tempFile) } catch {}
+  }
 }
 
 console.log('Pushing master...')
