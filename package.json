@@ -1,6 +1,6 @@
 {
   "name": "git-wayback",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "private": true,
   "description": "Visualize the evolution of any GitHub repository",
   "author": "Your Name",
