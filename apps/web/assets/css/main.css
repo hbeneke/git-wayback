@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
+}
+
+@layer components {
+  .text-gradient {
+    @apply bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent;
+  }
+}
+
+/* Transiciones de página */
+.page-enter-active,
+.page-leave-active {
+  @apply transition-opacity duration-150 ease-out;
+}
+
+.page-enter-from,
+.page-leave-to {
+  @apply opacity-0;
+}
