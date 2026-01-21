@@ -1,4 +1,5 @@
 export * from './branches'
 export * from './commits'
+export * from './evolution'
 export * from './repositories'
 export * from './screenshots'

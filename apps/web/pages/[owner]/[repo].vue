@@ -76,8 +76,13 @@
         </nav>
       </div>
 
-      <!-- Tab: Overview -->
-      <div v-show="activeTab === 'overview'">
+      <!-- Tab: Evolution (Diagram - Primary) -->
+      <div v-show="activeTab === 'evolution'">
+        <RepoDiagram :owner="owner" :repo="repo" />
+      </div>
+
+      <!-- Tab: Details (Old Overview) -->
+      <div v-show="activeTab === 'details'">
         <!-- Stats Cards -->
         <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
@@ -302,25 +307,6 @@
       </div>
     </div>
 
-    <!-- Tab: Diagram -->
-    <div v-show="activeTab === 'diagram'">
-      <section class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-        <div class="max-w-lg mx-auto">
-          <p class="text-4xl mb-4">🎬</p>
-          <h2 class="text-2xl font-bold mb-3">Code Evolution Timelapse</h2>
-          <p class="text-gray-500 mb-6">
-            An interactive visualization showing how files and code evolved over time. 
-            Drag the slider to travel through the repository's history and see how files 
-            were created, modified, and how the codebase grew.
-          </p>
-          <div class="inline-flex items-center gap-2 text-sm bg-yellow-50 text-yellow-700 px-4 py-2 rounded-full">
-            <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-            Coming Soon
-          </div>
-        </div>
-      </section>
-    </div>
-
     <!-- Tab: Screenshots -->
     <div v-show="activeTab === 'screenshots'">
       <section class="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
@@ -349,10 +335,10 @@ const owner = computed(() => route.params.owner as string)
 const repo = computed(() => route.params.repo as string)
 
 // Tabs
-const activeTab = ref<'overview' | 'diagram' | 'screenshots'>('overview')
+const activeTab = ref<'evolution' | 'details' | 'screenshots'>('evolution')
 const tabs = [
-  { id: 'overview' as const, label: 'Overview', icon: '📊' },
-  { id: 'diagram' as const, label: 'Diagram', icon: '🎬', badge: 'Soon' },
+  { id: 'evolution' as const, label: 'Evolution', icon: '🎬' },
+  { id: 'details' as const, label: 'Details', icon: '📊' },
   { id: 'screenshots' as const, label: 'Screenshots', icon: '📸', badge: 'Soon' },
 ]
 
