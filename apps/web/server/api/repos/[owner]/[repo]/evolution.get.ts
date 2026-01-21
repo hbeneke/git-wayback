@@ -1,0 +1,232 @@
+import { eq } from 'drizzle-orm'
+import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
+
+type GitHubHeaders = Record<string, string>
+
+function getHeaders(): GitHubHeaders {
+  const headers: GitHubHeaders = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'git-wayback',
+  }
+
+  const token = process.env.GITHUB_TOKEN
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  return headers
+}
+
+// Cache duration: 24 hours
+const CACHE_DURATION_MS = 24 * 60 * 60 * 1000
+
+interface GitHubTag {
+  name: string
+  commit: {
+    sha: string
+  }
+}
+
+interface GitHubCommitDetail {
+  sha: string
+  commit: {
+    message: string
+    author: {
+      name: string
+      date: string
+    }
+  }
+}
+
+interface GitHubTreeItem {
+  path: string
+  mode: string
+  type: 'blob' | 'tree'
+  sha: string
+  size?: number
+}
+
+interface GitHubTreeResponse {
+  sha: string
+  tree: GitHubTreeItem[]
+  truncated: boolean
+}
+
+// Fetch all evolution data from GitHub
+async function fetchFromGitHub(
+  owner: string,
+  repo: string,
+  limit: number
+): Promise<EvolutionSnapshotData[]> {
+  const headers = getHeaders()
+
+  // 1. Get all tags
+  const tagsResponse = await $fetch<GitHubTag[]>(
+    `https://api.github.com/repos/${owner}/${repo}/tags`,
+    {
+      headers,
+      query: { per_page: limit },
+    }
+  )
+
+  if (tagsResponse.length === 0) {
+    return []
+  }
+
+  // 2. For each tag, get commit info and tree in parallel
+  const snapshots: EvolutionSnapshotData[] = []
+
+  // Process tags in batches to avoid rate limits
+  const batchSize = 5
+  for (let i = 0; i < tagsResponse.length; i += batchSize) {
+    const batch = tagsResponse.slice(i, i + batchSize)
+
+    const batchResults = await Promise.all(
+      batch.map(async (tag) => {
+        try {
+          // Get commit details and tree in parallel
+          const [commitDetail, treeResponse] = await Promise.all([
+            $fetch<GitHubCommitDetail>(
+              `https://api.github.com/repos/${owner}/${repo}/commits/${tag.commit.sha}`,
+              { headers }
+            ),
+            $fetch<GitHubTreeResponse>(
+              `https://api.github.com/repos/${owner}/${repo}/git/trees/${tag.commit.sha}`,
+              {
+                headers,
+                query: { recursive: '1' },
+              }
+            ),
+          ])
+
+          // Process files
+          const files = treeResponse.tree
+            .filter((item) => item.type === 'blob')
+            .map((item) => {
+              const parts = item.path.split('/')
+              const name = parts[parts.length - 1]
+              const extMatch = name.match(/\.([^.]+)$/)
+
+              return {
+                path: item.path,
+                name,
+                size: item.size || 0,
+                extension: extMatch ? extMatch[1] : null,
+              }
+            })
+
+          return {
+            tag: tag.name,
+            sha: tag.commit.sha,
+            date: commitDetail.commit.author.date,
+            message: commitDetail.commit.message.split('\n')[0],
+            files,
+            stats: {
+              totalFiles: files.length,
+              totalSize: files.reduce((sum, f) => sum + f.size, 0),
+            },
+          }
+        } catch (err) {
+          console.error(`Failed to fetch data for tag ${tag.name}:`, err)
+          return null
+        }
+      })
+    )
+
+    // Add successful results
+    for (const result of batchResults) {
+      if (result) snapshots.push(result)
+    }
+  }
+
+  // Sort by date (oldest first)
+  snapshots.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  return snapshots
+}
+
+export default defineEventHandler(async (event) => {
+  const { owner, repo } = getRouterParams(event)
+  const query = getQuery(event)
+  const limit = Math.min(Number(query.limit) || 20, 30)
+  const forceRefresh = query.refresh === 'true'
+
+  const repoId = `${owner}/${repo}`
+
+  // Get database connection
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw createError({
+      statusCode: 500,
+      message: 'Database connection not configured',
+    })
+  }
+
+  const db = createDb(connectionString)
+
+  // 1. Check if we have cached data
+  if (!forceRefresh) {
+    const cached = await db
+      .select()
+      .from(evolutionSnapshots)
+      .where(eq(evolutionSnapshots.id, repoId))
+      .limit(1)
+
+    if (cached.length > 0) {
+      const cacheAge = Date.now() - new Date(cached[0].capturedAt).getTime()
+
+      // If cache is still fresh, return it
+      if (cacheAge < CACHE_DURATION_MS) {
+        console.log(`[Evolution] Cache hit for ${repoId}, age: ${Math.round(cacheAge / 1000 / 60)} min`)
+        return {
+          snapshots: cached[0].snapshots,
+          repoName: repo,
+          cached: true,
+          capturedAt: cached[0].capturedAt,
+        }
+      }
+
+      console.log(`[Evolution] Cache expired for ${repoId}, refreshing...`)
+    }
+  }
+
+  // 2. Fetch from GitHub
+  console.log(`[Evolution] Fetching from GitHub: ${repoId}`)
+  const snapshots = await fetchFromGitHub(owner, repo, limit)
+
+  // 3. Save to database (upsert)
+  if (snapshots.length > 0) {
+    const now = new Date()
+
+    await db
+      .insert(evolutionSnapshots)
+      .values({
+        id: repoId,
+        owner,
+        name: repo,
+        snapshots,
+        tagCount: snapshots.length,
+        capturedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: evolutionSnapshots.id,
+        set: {
+          snapshots,
+          tagCount: snapshots.length,
+          capturedAt: now,
+          updatedAt: now,
+        },
+      })
+
+    console.log(`[Evolution] Saved ${snapshots.length} snapshots for ${repoId}`)
+  }
+
+  return {
+    snapshots,
+    repoName: repo,
+    cached: false,
+    capturedAt: new Date(),
+  }
+})
