@@ -1,22 +1,6 @@
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
-
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
-  const headers = getHeaders()
+  const { owner, repo } = validateRepoParams(event)
+  const headers = getGitHubHeaders()
 
   // Fetch all data in parallel
   const [
