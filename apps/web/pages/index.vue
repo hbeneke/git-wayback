@@ -63,6 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber } from '@git-wayback/shared'
+
 // SEO Meta
 useSeoMeta({
   title: 'git-wayback - Visualize GitHub Repository Evolution',
@@ -120,12 +122,5 @@ async function search() {
 function debouncedSearch() {
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(search, 300)
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1000) {
-    return `${(num / 1000).toFixed(1)}k`
-  }
-  return num.toString()
 }
 </script>
