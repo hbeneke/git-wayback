@@ -163,7 +163,6 @@ const diagramContainer = ref<HTMLElement | null>(null)
 const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
 let playInterval: ReturnType<typeof setInterval> | null = null
-let simulation: d3.Simulation<any, any> | null = null
 
 // Extension colors
 const extensionColors: Record<string, string> = {
@@ -532,21 +531,20 @@ function stopPlay() {
   }
 }
 
-// Initialize
+// Initialize and set up resize observer
 onMounted(() => {
   loadEvolution()
-})
 
-// Handle resize
-onMounted(() => {
   const resizeObserver = new ResizeObserver(() => {
     if (snapshots.value.length > 0 && !loading.value) {
       initGource()
     }
   })
+
   if (diagramContainer.value) {
     resizeObserver.observe(diagramContainer.value)
   }
+
   onUnmounted(() => {
     resizeObserver.disconnect()
     stopPlay()
