@@ -9,7 +9,7 @@ export type GitHubHeaders = Record<string, string>
 
 /**
  * Builds headers for GitHub API requests.
- * Automatically includes authorization if GITHUB_TOKEN is set.
+ * Automatically includes authorization if GITHUB_TOKEN is configured.
  */
 export function getGitHubHeaders(): GitHubHeaders {
   const headers: GitHubHeaders = {
@@ -17,7 +17,7 @@ export function getGitHubHeaders(): GitHubHeaders {
     'User-Agent': USER_AGENT,
   }
 
-  const token = process.env.GITHUB_TOKEN
+  const token = getGitHubToken()
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }

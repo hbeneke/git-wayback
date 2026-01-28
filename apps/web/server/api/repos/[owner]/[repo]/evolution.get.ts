@@ -136,17 +136,7 @@ export default defineEventHandler(async (event) => {
   const forceRefresh = query.refresh === 'true'
 
   const repoId = `${owner}/${repo}`
-
-  // Get database connection
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    throw createError({
-      statusCode: 500,
-      message: 'Database connection not configured',
-    })
-  }
-
-  const db = createDb(connectionString)
+  const db = createDb(getDatabaseUrl())
 
   // 1. Check if we have cached data
   if (!forceRefresh) {
