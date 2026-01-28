@@ -111,8 +111,7 @@ async function search() {
     })
     results.value = data.items
     hasSearched.value = true
-  } catch (error) {
-    console.error('Search failed:', error)
+  } catch {
     results.value = []
   } finally {
     isLoading.value = false
