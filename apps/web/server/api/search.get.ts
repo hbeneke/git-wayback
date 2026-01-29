@@ -1,3 +1,5 @@
+import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
+
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
@@ -6,7 +8,7 @@ export default defineEventHandler(async (event) => {
     return { items: [], total_count: 0 }
   }
 
-  const searchTerm = query.q.trim().slice(0, 256)
+  const searchTerm = query.q.trim().slice(0, DISPLAY.MAX_SEARCH_LENGTH)
 
   const response = await $fetch<{
     total_count: number
@@ -25,7 +27,7 @@ export default defineEventHandler(async (event) => {
     headers: getGitHubHeaders(),
     query: {
       q: searchTerm,
-      per_page: 10,
+      per_page: GITHUB_API.SEARCH_PER_PAGE,
       sort: 'stars',
       order: 'desc',
     },
