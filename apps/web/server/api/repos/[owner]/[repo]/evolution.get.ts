@@ -1,8 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
-
-// Cache duration: 24 hours
-const CACHE_DURATION_MS = 24 * 60 * 60 * 1000
+import { EVOLUTION_CACHE_DURATION_MS, EVOLUTION, GITHUB_API } from '@git-wayback/shared'
 
 interface GitHubTag {
   name: string
@@ -61,9 +59,8 @@ async function fetchFromGitHub(
   const snapshots: EvolutionSnapshotData[] = []
 
   // Process tags in batches to avoid rate limits
-  const batchSize = 5
-  for (let i = 0; i < tagsResponse.length; i += batchSize) {
-    const batch = tagsResponse.slice(i, i + batchSize)
+  for (let i = 0; i < tagsResponse.length; i += GITHUB_API.BATCH_SIZE) {
+    const batch = tagsResponse.slice(i, i + GITHUB_API.BATCH_SIZE)
 
     const batchResults = await Promise.all(
       batch.map(async (tag) => {
@@ -132,7 +129,7 @@ async function fetchFromGitHub(
 export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
-  const limit = Math.min(Number(query.limit) || 20, 30)
+  const limit = Math.min(Number(query.limit) || EVOLUTION.DEFAULT_LIMIT, EVOLUTION.MAX_LIMIT)
   const forceRefresh = query.refresh === 'true'
 
   const repoId = `${owner}/${repo}`
@@ -150,7 +147,7 @@ export default defineEventHandler(async (event) => {
       const cacheAge = Date.now() - new Date(cached[0].capturedAt).getTime()
 
       // If cache is still fresh, return it
-      if (cacheAge < CACHE_DURATION_MS) {
+      if (cacheAge < EVOLUTION_CACHE_DURATION_MS) {
         logger.evolution.debug(`Cache hit for ${repoId}`, { ageMinutes: Math.round(cacheAge / 1000 / 60) })
         return {
           snapshots: cached[0].snapshots,

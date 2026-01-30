@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatNumber } from '@git-wayback/shared'
+import { formatNumber, SEARCH_DEBOUNCE_MS } from '@git-wayback/shared'
 
 // SEO Meta
 useSeoMeta({
@@ -120,6 +120,6 @@ async function search() {
 
 function debouncedSearch() {
   if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(search, 300)
+  debounceTimer = setTimeout(search, SEARCH_DEBOUNCE_MS)
 }
 </script>

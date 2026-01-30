@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { DISPLAY } from '@git-wayback/shared'
 
 /**
  * GitHub username/organization name constraints:
@@ -93,10 +94,10 @@ export function validateSearchQuery(query: unknown): string {
     })
   }
 
-  if (trimmed.length > 256) {
+  if (trimmed.length > DISPLAY.MAX_SEARCH_LENGTH) {
     throw createError({
       statusCode: 400,
-      message: 'Search query must not exceed 256 characters',
+      message: `Search query must not exceed ${DISPLAY.MAX_SEARCH_LENGTH} characters`,
     })
   }
 

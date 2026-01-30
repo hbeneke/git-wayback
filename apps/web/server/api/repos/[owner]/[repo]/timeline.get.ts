@@ -1,3 +1,5 @@
+import { TIMELINE } from '@git-wayback/shared'
+
 interface GitHubTag {
   name: string
   commit: {
@@ -29,7 +31,7 @@ export interface TagPoint {
 export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
-  const limit = Math.min(Number(query.limit) || 50, 100)
+  const limit = Math.min(Number(query.limit) || TIMELINE.DEFAULT_LIMIT, TIMELINE.MAX_LIMIT)
 
   const headers = getGitHubHeaders()
 
