@@ -1,10 +1,14 @@
+import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
+
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const q = query.q as string
 
-  if (!q || q.length < 2) {
+  // Return empty results for short/missing queries without error
+  if (!query.q || typeof query.q !== 'string' || query.q.trim().length < 2) {
     return { items: [], total_count: 0 }
   }
+
+  const searchTerm = query.q.trim().slice(0, DISPLAY.MAX_SEARCH_LENGTH)
 
   const response = await $fetch<{
     total_count: number
@@ -20,13 +24,10 @@ export default defineEventHandler(async (event) => {
       }
     }>
   }>('https://api.github.com/search/repositories', {
-    headers: {
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'git-wayback',
-    },
+    headers: getGitHubHeaders(),
     query: {
-      q,
-      per_page: 10,
+      q: searchTerm,
+      per_page: GITHUB_API.SEARCH_PER_PAGE,
       sort: 'stars',
       order: 'desc',
     },

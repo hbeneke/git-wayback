@@ -1,22 +1,8 @@
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
+import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
 
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
-  const headers = getHeaders()
+  const { owner, repo } = validateRepoParams(event)
+  const headers = getGitHubHeaders()
 
   // Fetch all data in parallel
   const [
@@ -37,25 +23,25 @@ export default defineEventHandler(async (event) => {
     // Top contributors
     $fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
       headers,
-      query: { per_page: 10 },
+      query: { per_page: GITHUB_API.CONTRIBUTORS_PER_PAGE },
     }).catch(() => []),
 
     // Recent commits
     $fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, {
       headers,
-      query: { per_page: 30 },
+      query: { per_page: GITHUB_API.COMMITS_PER_PAGE },
     }).catch(() => []),
 
     // Branches
     $fetch(`https://api.github.com/repos/${owner}/${repo}/branches`, {
       headers,
-      query: { per_page: 100 },
+      query: { per_page: GITHUB_API.BRANCHES_PER_PAGE },
     }).catch(() => []),
 
     // Releases
     $fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
       headers,
-      query: { per_page: 10 },
+      query: { per_page: GITHUB_API.RELEASES_PER_PAGE },
     }).catch(() => []),
   ])
 
@@ -107,7 +93,7 @@ export default defineEventHandler(async (event) => {
   }))
 
   // Format recent commits
-  const recentCommits = commitList.slice(0, 15).map((c) => ({
+  const recentCommits = commitList.slice(0, DISPLAY.RECENT_COMMITS).map((c) => ({
     sha: c.sha,
     shortSha: c.sha.substring(0, 7),
     message: c.commit.message.split('\n')[0],

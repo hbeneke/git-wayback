@@ -111,6 +111,13 @@
 
 <script setup lang="ts">
 import * as d3 from 'd3'
+import {
+  formatDate,
+  DIAGRAM,
+  D3_TRANSITION_DURATION_MS,
+  D3_EXIT_TRANSITION_DURATION_MS,
+  TIMELINE_PLAYBACK_INTERVAL_MS,
+} from '@git-wayback/shared'
 
 interface FileNode {
   path: string
@@ -162,7 +169,6 @@ const diagramContainer = ref<HTMLElement | null>(null)
 const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
 let playInterval: ReturnType<typeof setInterval> | null = null
-let simulation: d3.Simulation<any, any> | null = null
 
 // Extension colors
 const extensionColors: Record<string, string> = {
@@ -203,7 +209,6 @@ async function loadEvolution(forceRefresh = false) {
       initGource()
     }
   } catch (err: any) {
-    console.error('Failed to load evolution:', err)
     error.value = err.message || 'Failed to load repository evolution'
   } finally {
     loading.value = false
@@ -256,8 +261,8 @@ function initGource() {
   if (!diagramContainer.value || !currentSnapshot.value) return
 
   const container = diagramContainer.value
-  const width = container.clientWidth || 900
-  const height = 600
+  const width = container.clientWidth || DIAGRAM.DEFAULT_WIDTH
+  const height = DIAGRAM.HEIGHT
   const centerX = width / 2
   const centerY = height / 2
 
@@ -337,7 +342,7 @@ function renderTree(
 
   linkSelection.exit()
     .transition()
-    .duration(300)
+    .duration(D3_EXIT_TRANSITION_DURATION_MS)
     .attr('opacity', 0)
     .remove()
 
@@ -350,7 +355,7 @@ function renderTree(
 
   linkEnter.merge(linkSelection)
     .transition()
-    .duration(500)
+    .duration(D3_TRANSITION_DURATION_MS)
     .attr('opacity', 1)
     .attr('d', (d) => {
       const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
@@ -365,7 +370,7 @@ function renderTree(
 
   nodeSelection.exit()
     .transition()
-    .duration(300)
+    .duration(D3_EXIT_TRANSITION_DURATION_MS)
     .attr('opacity', 0)
     .remove()
 
@@ -384,7 +389,7 @@ function renderTree(
 
   nodeUpdate
     .transition()
-    .duration(500)
+    .duration(D3_TRANSITION_DURATION_MS)
     .attr('opacity', 1)
     .attr('transform', (d) => {
       const [x, y] = radialPoint(d.x!, d.y!)
@@ -466,7 +471,7 @@ function toggleExtension(ext: string) {
       const linksGroup = g.select<SVGGElement>('.links')
       const nodesGroup = g.select<SVGGElement>('.nodes')
       const width = diagramContainer.value.clientWidth || 900
-      const height = 600
+      const height = DIAGRAM.HEIGHT
       renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
     }
   }
@@ -496,7 +501,7 @@ watch(currentIndex, () => {
   const nodesGroup = g.select<SVGGElement>('.nodes')
   
   const width = diagramContainer.value.clientWidth || 900
-  const height = 600
+  const height = DIAGRAM.HEIGHT
   
   renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
 })
@@ -520,7 +525,7 @@ function startPlay() {
     } else {
       stopPlay()
     }
-  }, 2000)
+  }, TIMELINE_PLAYBACK_INTERVAL_MS)
 }
 
 function stopPlay() {
@@ -531,29 +536,20 @@ function stopPlay() {
   }
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-// Initialize
+// Initialize and set up resize observer
 onMounted(() => {
   loadEvolution()
-})
 
-// Handle resize
-onMounted(() => {
   const resizeObserver = new ResizeObserver(() => {
     if (snapshots.value.length > 0 && !loading.value) {
       initGource()
     }
   })
+
   if (diagramContainer.value) {
     resizeObserver.observe(diagramContainer.value)
   }
+
   onUnmounted(() => {
     resizeObserver.disconnect()
     stopPlay()

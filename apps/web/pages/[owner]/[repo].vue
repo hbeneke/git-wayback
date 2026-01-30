@@ -78,7 +78,13 @@
 
       <!-- Tab: Evolution (Diagram - Primary) -->
       <div v-show="activeTab === 'evolution'">
-        <RepoDiagram :owner="owner" :repo="repo" />
+        <ErrorBoundary
+          title="Visualization Error"
+          message="Failed to render the repository evolution diagram."
+          icon="📊"
+        >
+          <RepoDiagram :owner="owner" :repo="repo" />
+        </ErrorBoundary>
       </div>
 
       <!-- Tab: Details (Old Overview) -->
@@ -329,6 +335,15 @@
 </template>
 
 <script setup lang="ts">
+import {
+  formatNumber,
+  formatDate,
+  formatRelativeDate,
+  formatSize,
+  formatUrl,
+  getBarHeight,
+} from '@git-wayback/shared'
+
 const route = useRoute()
 
 const owner = computed(() => route.params.owner as string)
@@ -415,52 +430,8 @@ const languageColors: Record<string, string> = {
 
 function getLanguageColor(name: string, index: number): string {
   if (languageColors[name]) return languageColors[name]
-  // Fallback colors
-  const fallback = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#14b8a6']
-  return fallback[index % fallback.length]
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
-  return String(num)
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) return 'today'
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
-  return `${Math.floor(diffDays / 365)} years ago`
-}
-
-function formatSize(sizeKb: number): string {
-  if (sizeKb >= 1024 * 1024) return `${(sizeKb / (1024 * 1024)).toFixed(1)} GB`
-  if (sizeKb >= 1024) return `${(sizeKb / 1024).toFixed(1)} MB`
-  return `${sizeKb} KB`
-}
-
-function formatUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
-}
-
-function getBarHeight(value: number, array: number[]): number {
-  const max = Math.max(...array, 1)
-  return Math.round((value / max) * 60)
+  const fallbackColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#14b8a6']
+  return fallbackColors[index % fallbackColors.length]
 }
 
 // Dynamic SEO

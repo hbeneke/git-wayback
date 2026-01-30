@@ -63,6 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatNumber, SEARCH_DEBOUNCE_MS } from '@git-wayback/shared'
+
 // SEO Meta
 useSeoMeta({
   title: 'git-wayback - Visualize GitHub Repository Evolution',
@@ -109,8 +111,7 @@ async function search() {
     })
     results.value = data.items
     hasSearched.value = true
-  } catch (error) {
-    console.error('Search failed:', error)
+  } catch {
     results.value = []
   } finally {
     isLoading.value = false
@@ -119,13 +120,6 @@ async function search() {
 
 function debouncedSearch() {
   if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(search, 300)
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1000) {
-    return `${(num / 1000).toFixed(1)}k`
-  }
-  return num.toString()
+  debounceTimer = setTimeout(search, SEARCH_DEBOUNCE_MS)
 }
 </script>

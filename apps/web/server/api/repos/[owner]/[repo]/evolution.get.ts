@@ -1,24 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
-
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
-
-// Cache duration: 24 hours
-const CACHE_DURATION_MS = 24 * 60 * 60 * 1000
+import { EVOLUTION_CACHE_DURATION_MS, EVOLUTION, GITHUB_API } from '@git-wayback/shared'
 
 interface GitHubTag {
   name: string
@@ -58,7 +40,7 @@ async function fetchFromGitHub(
   repo: string,
   limit: number
 ): Promise<EvolutionSnapshotData[]> {
-  const headers = getHeaders()
+  const headers = getGitHubHeaders()
 
   // 1. Get all tags
   const tagsResponse = await $fetch<GitHubTag[]>(
@@ -77,9 +59,8 @@ async function fetchFromGitHub(
   const snapshots: EvolutionSnapshotData[] = []
 
   // Process tags in batches to avoid rate limits
-  const batchSize = 5
-  for (let i = 0; i < tagsResponse.length; i += batchSize) {
-    const batch = tagsResponse.slice(i, i + batchSize)
+  for (let i = 0; i < tagsResponse.length; i += GITHUB_API.BATCH_SIZE) {
+    const batch = tagsResponse.slice(i, i + GITHUB_API.BATCH_SIZE)
 
     const batchResults = await Promise.all(
       batch.map(async (tag) => {
@@ -127,7 +108,7 @@ async function fetchFromGitHub(
             },
           }
         } catch (err) {
-          console.error(`Failed to fetch data for tag ${tag.name}:`, err)
+          logger.evolution.warn(`Failed to fetch data for tag ${tag.name}`, err)
           return null
         }
       })
@@ -146,23 +127,13 @@ async function fetchFromGitHub(
 }
 
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
+  const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
-  const limit = Math.min(Number(query.limit) || 20, 30)
+  const limit = Math.min(Number(query.limit) || EVOLUTION.DEFAULT_LIMIT, EVOLUTION.MAX_LIMIT)
   const forceRefresh = query.refresh === 'true'
 
   const repoId = `${owner}/${repo}`
-
-  // Get database connection
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    throw createError({
-      statusCode: 500,
-      message: 'Database connection not configured',
-    })
-  }
-
-  const db = createDb(connectionString)
+  const db = createDb(getDatabaseUrl())
 
   // 1. Check if we have cached data
   if (!forceRefresh) {
@@ -176,8 +147,8 @@ export default defineEventHandler(async (event) => {
       const cacheAge = Date.now() - new Date(cached[0].capturedAt).getTime()
 
       // If cache is still fresh, return it
-      if (cacheAge < CACHE_DURATION_MS) {
-        console.log(`[Evolution] Cache hit for ${repoId}, age: ${Math.round(cacheAge / 1000 / 60)} min`)
+      if (cacheAge < EVOLUTION_CACHE_DURATION_MS) {
+        logger.evolution.debug(`Cache hit for ${repoId}`, { ageMinutes: Math.round(cacheAge / 1000 / 60) })
         return {
           snapshots: cached[0].snapshots,
           repoName: repo,
@@ -186,12 +157,12 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      console.log(`[Evolution] Cache expired for ${repoId}, refreshing...`)
+      logger.evolution.info(`Cache expired for ${repoId}, refreshing...`)
     }
   }
 
   // 2. Fetch from GitHub
-  console.log(`[Evolution] Fetching from GitHub: ${repoId}`)
+  logger.evolution.info(`Fetching from GitHub: ${repoId}`)
   const snapshots = await fetchFromGitHub(owner, repo, limit)
 
   // 3. Save to database (upsert)
@@ -220,7 +191,7 @@ export default defineEventHandler(async (event) => {
         },
       })
 
-    console.log(`[Evolution] Saved ${snapshots.length} snapshots for ${repoId}`)
+    logger.evolution.success(`Saved ${snapshots.length} snapshots for ${repoId}`)
   }
 
   return {

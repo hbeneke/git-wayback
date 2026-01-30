@@ -1,19 +1,3 @@
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
-
 interface GitHubTreeItem {
   path: string
   mode: string
@@ -41,18 +25,9 @@ export interface FileNode {
 }
 
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
-  const query = getQuery(event)
-  const commitSha = query.sha as string
-
-  if (!commitSha) {
-    throw createError({
-      statusCode: 400,
-      message: 'sha query parameter is required',
-    })
-  }
-
-  const headers = getHeaders()
+  const { owner, repo } = validateRepoParams(event)
+  const commitSha = validateCommitSha(event)
+  const headers = getGitHubHeaders()
 
   // Get the tree for this commit (recursive)
   const treeResponse = await $fetch<GitHubTreeResponse>(
