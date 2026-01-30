@@ -1,22 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
 
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
-
 // Cache duration: 24 hours
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000
 
@@ -58,7 +42,7 @@ async function fetchFromGitHub(
   repo: string,
   limit: number
 ): Promise<EvolutionSnapshotData[]> {
-  const headers = getHeaders()
+  const headers = getGitHubHeaders()
 
   // 1. Get all tags
   const tagsResponse = await $fetch<GitHubTag[]>(
@@ -146,7 +130,7 @@ async function fetchFromGitHub(
 }
 
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
+  const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
   const limit = Math.min(Number(query.limit) || 20, 30)
   const forceRefresh = query.refresh === 'true'

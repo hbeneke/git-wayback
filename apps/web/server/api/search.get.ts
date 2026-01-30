@@ -1,10 +1,12 @@
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const q = query.q as string
 
-  if (!q || q.length < 2) {
+  // Return empty results for short/missing queries without error
+  if (!query.q || typeof query.q !== 'string' || query.q.trim().length < 2) {
     return { items: [], total_count: 0 }
   }
+
+  const searchTerm = query.q.trim().slice(0, 256)
 
   const response = await $fetch<{
     total_count: number
@@ -20,12 +22,9 @@ export default defineEventHandler(async (event) => {
       }
     }>
   }>('https://api.github.com/search/repositories', {
-    headers: {
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'git-wayback',
-    },
+    headers: getGitHubHeaders(),
     query: {
-      q,
+      q: searchTerm,
       per_page: 10,
       sort: 'stars',
       order: 'desc',

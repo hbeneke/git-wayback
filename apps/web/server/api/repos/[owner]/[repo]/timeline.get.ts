@@ -1,19 +1,3 @@
-type GitHubHeaders = Record<string, string>
-
-function getHeaders(): GitHubHeaders {
-  const headers: GitHubHeaders = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'git-wayback',
-  }
-
-  const token = process.env.GITHUB_TOKEN
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  return headers
-}
-
 interface GitHubTag {
   name: string
   commit: {
@@ -43,11 +27,11 @@ export interface TagPoint {
 }
 
 export default defineEventHandler(async (event) => {
-  const { owner, repo } = getRouterParams(event)
+  const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
   const limit = Math.min(Number(query.limit) || 50, 100)
 
-  const headers = getHeaders()
+  const headers = getGitHubHeaders()
 
   // Get tags for the timeline
   const tags = await $fetch<GitHubTag[]>(
