@@ -111,6 +111,7 @@
 
 <script setup lang="ts">
 import * as d3 from 'd3'
+import { formatDate } from '@git-wayback/shared'
 
 interface FileNode {
   path: string
@@ -529,14 +530,6 @@ function stopPlay() {
     clearInterval(playInterval)
     playInterval = null
   }
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 // Initialize
