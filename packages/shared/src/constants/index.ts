@@ -87,6 +87,31 @@ export const DISPLAY = {
 // Diagram Configuration
 // =============================================================================
 
+// =============================================================================
+// Rate Limiting
+// =============================================================================
+
+export const RATE_LIMIT = {
+  /** Standard API rate limit per minute */
+  API_REQUESTS_PER_MINUTE: 100,
+
+  /** Search endpoint rate limit per minute */
+  SEARCH_REQUESTS_PER_MINUTE: 30,
+
+  /** Evolution endpoint rate limit per minute */
+  EVOLUTION_REQUESTS_PER_MINUTE: 20,
+
+  /** Health check rate limit per minute */
+  HEALTH_REQUESTS_PER_MINUTE: 300,
+
+  /** Cleanup interval for expired entries */
+  CLEANUP_INTERVAL_MS: 5 * 60 * 1000,
+} as const
+
+// =============================================================================
+// Diagram Configuration
+// =============================================================================
+
 export const DIAGRAM = {
   /** Fixed height for the visualization container */
   HEIGHT: 600,
