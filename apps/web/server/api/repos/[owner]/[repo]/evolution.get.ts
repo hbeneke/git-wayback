@@ -111,7 +111,7 @@ async function fetchFromGitHub(
             },
           }
         } catch (err) {
-          console.error(`Failed to fetch data for tag ${tag.name}:`, err)
+          logger.evolution.warn(`Failed to fetch data for tag ${tag.name}`, err)
           return null
         }
       })
@@ -161,7 +161,7 @@ export default defineEventHandler(async (event) => {
 
       // If cache is still fresh, return it
       if (cacheAge < CACHE_DURATION_MS) {
-        console.log(`[Evolution] Cache hit for ${repoId}, age: ${Math.round(cacheAge / 1000 / 60)} min`)
+        logger.evolution.debug(`Cache hit for ${repoId}`, { ageMinutes: Math.round(cacheAge / 1000 / 60) })
         return {
           snapshots: cached[0].snapshots,
           repoName: repo,
@@ -170,12 +170,12 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      console.log(`[Evolution] Cache expired for ${repoId}, refreshing...`)
+      logger.evolution.info(`Cache expired for ${repoId}, refreshing...`)
     }
   }
 
   // 2. Fetch from GitHub
-  console.log(`[Evolution] Fetching from GitHub: ${repoId}`)
+  logger.evolution.info(`Fetching from GitHub: ${repoId}`)
   const snapshots = await fetchFromGitHub(owner, repo, limit)
 
   // 3. Save to database (upsert)
@@ -204,7 +204,7 @@ export default defineEventHandler(async (event) => {
         },
       })
 
-    console.log(`[Evolution] Saved ${snapshots.length} snapshots for ${repoId}`)
+    logger.evolution.success(`Saved ${snapshots.length} snapshots for ${repoId}`)
   }
 
   return {

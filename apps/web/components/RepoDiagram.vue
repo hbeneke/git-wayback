@@ -203,7 +203,6 @@ async function loadEvolution(forceRefresh = false) {
       initGource()
     }
   } catch (err: any) {
-    console.error('Failed to load evolution:', err)
     error.value = err.message || 'Failed to load repository evolution'
   } finally {
     loading.value = false
