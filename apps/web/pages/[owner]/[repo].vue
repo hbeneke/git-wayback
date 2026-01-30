@@ -78,7 +78,13 @@
 
       <!-- Tab: Evolution (Diagram - Primary) -->
       <div v-show="activeTab === 'evolution'">
-        <RepoDiagram :owner="owner" :repo="repo" />
+        <ErrorBoundary
+          title="Visualization Error"
+          message="Failed to render the repository evolution diagram."
+          icon="📊"
+        >
+          <RepoDiagram :owner="owner" :repo="repo" />
+        </ErrorBoundary>
       </div>
 
       <!-- Tab: Details (Old Overview) -->
