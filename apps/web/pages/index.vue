@@ -65,8 +65,8 @@
 
     <!-- Recent history -->
     <section v-if="!searchQuery && history.length > 0" class="mt-8">
-      <h2 class="section-title mb-3">Recent</h2>
-      <ul class="divide-y divider">
+      <h2 class="section-title mb-3">Recent repositories</h2>
+      <ul>
         <li v-for="repo in history" :key="repo.fullName" class="flex items-center gap-3 py-2">
           <img
             :src="repo.avatar"
