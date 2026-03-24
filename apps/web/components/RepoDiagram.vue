@@ -21,7 +21,7 @@
     <template v-else>
       <div class="border border-[rgb(var(--border))] rounded overflow-hidden">
         <!-- Header -->
-        <div class="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between">
+        <div class="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between relative z-10">
           <div class="flex items-center gap-3">
             <span class="section-title text-xs">Evolution</span>
             <span v-if="currentSnapshot" class="text-primary text-xs font-semibold">
@@ -31,6 +31,24 @@
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
             <span v-if="currentSnapshot">{{ currentSnapshot.stats.totalFiles }} files</span>
             <span v-if="currentSnapshot">{{ formatDate(currentSnapshot.date) }}</span>
+          </div>
+        </div>
+
+        <!-- Tag message -->
+        <div
+          v-if="currentSnapshot?.message"
+          class="px-4 py-2 border-b border-[rgb(var(--border))] relative z-10"
+        >
+          <div class="flex items-start gap-3">
+            <pre v-if="messageExpanded" class="flex-1 text-[11px] text-[rgb(var(--muted))] whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">{{ currentSnapshot.message.trim() }}</pre>
+            <p v-else class="flex-1 text-[11px] text-[rgb(var(--muted))] truncate">{{ tagFirstLine }}</p>
+            <button
+              v-if="tagIsMultiline"
+              @click.stop="messageExpanded = !messageExpanded"
+              class="text-[10px] text-primary shrink-0 hover:text-[rgb(var(--primary-hovered))]"
+            >
+              {{ messageExpanded ? 'collapse' : 'expand' }}
+            </button>
           </div>
         </div>
 
@@ -44,13 +62,12 @@
             class="file-tooltip"
             :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
           >
-            <span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span>
-            <span class="text-[rgb(var(--muted))]">{{ tooltip.path }}</span>
+            <span class="text-[rgb(var(--muted))]">{{ tooltip.dir }}<span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span></span>
             <span class="text-primary text-[10px]">{{ tooltip.kind }}</span>
           </div>
 
           <!-- Legend -->
-          <div class="legend-overlay">
+          <div class="legend-overlay" @pointerdown.stop @click.stop>
             <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider mb-2">File types</h4>
             <div class="grid grid-cols-2 gap-x-3 gap-y-1">
               <button
@@ -68,7 +85,7 @@
         </div>
 
         <!-- Controls -->
-        <div class="px-4 py-3 border-t border-[rgb(var(--border))]">
+        <div class="px-4 py-3 border-t border-[rgb(var(--border))] relative z-10">
           <div class="flex items-center gap-3">
             <button
               @click="togglePlay"
@@ -80,13 +97,29 @@
               {{ isPlaying ? '||' : '>' }}
             </button>
 
-            <input
-              type="range"
-              v-model.number="currentIndex"
-              :min="0"
-              :max="snapshots.length - 1"
-              class="flex-1 h-1 bg-[rgb(var(--border))] rounded appearance-none cursor-pointer slider"
-            />
+            <div class="flex-1 relative">
+              <!-- Segmented timeline -->
+              <div class="flex h-6 items-end gap-px">
+                <button
+                  v-for="(snap, i) in snapshots"
+                  :key="snap.tag"
+                  @click="currentIndex = i"
+                  @mouseenter="hoveredIndex = i"
+                  @mouseleave="hoveredIndex = null"
+                  class="flex-1 rounded-sm transition-all duration-150 cursor-pointer"
+                  :class="i <= currentIndex ? 'bg-primary' : 'bg-[rgb(var(--border))]'"
+                  :style="{ height: i === currentIndex ? '100%' : i === hoveredIndex ? '80%' : '40%' }"
+                />
+              </div>
+              <!-- Hover tooltip -->
+              <div
+                v-if="hoveredIndex !== null"
+                class="absolute -top-6 bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded px-2 py-0.5 text-[10px] text-primary font-semibold whitespace-nowrap pointer-events-none"
+                :style="{ left: `${(hoveredIndex / Math.max(snapshots.length - 1, 1)) * 100}%`, transform: 'translateX(-50%)' }"
+              >
+                {{ snapshots[hoveredIndex].tag }}
+              </div>
+            </div>
 
             <span class="text-xs text-[rgb(var(--muted))] min-w-[50px] text-right">
               {{ currentIndex + 1 }}/{{ snapshots.length }}
@@ -160,8 +193,10 @@ const error = ref<string | null>(null)
 const diagramContainer = ref<HTMLElement | null>(null)
 const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
-const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; path: string; kind: string }>({
-  visible: false, x: 0, y: 0, name: '', path: '', kind: '',
+const hoveredIndex = ref<number | null>(null)
+const messageExpanded = ref(false)
+const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
+  visible: false, x: 0, y: 0, name: '', dir: '', kind: '',
 })
 let playInterval: ReturnType<typeof setInterval> | null = null
 
@@ -182,6 +217,8 @@ const extensionColors: Record<string, string> = {
 }
 
 const currentSnapshot = computed(() => snapshots.value[currentIndex.value])
+const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split('\n')[0] || '')
+const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
 
 async function loadEvolution(forceRefresh = false) {
   loading.value = true
@@ -196,9 +233,13 @@ async function loadEvolution(forceRefresh = false) {
     repoName.value = response.repoName
 
     if (snapshots.value.length > 0) {
-      currentIndex.value = 0
+      // Start at the first snapshot that has files
+      const firstWithFiles = snapshots.value.findIndex((s) => s.files.length > 0)
+      currentIndex.value = firstWithFiles >= 0 ? firstWithFiles : 0
+      // Wait for DOM to fully render (v-show conditional + container sizing)
       await nextTick()
-      initGource()
+      await nextTick()
+      retryInitGource()
     }
   } catch (err: any) {
     error.value = err.message || 'Failed to load repository evolution'
@@ -247,6 +288,15 @@ function buildTree(files: FileNode[]): TreeNode {
   return root
 }
 
+function retryInitGource(attempts = 0) {
+  if (!diagramContainer.value || !currentSnapshot.value) return
+  if (diagramContainer.value.clientWidth === 0 && attempts < 10) {
+    requestAnimationFrame(() => retryInitGource(attempts + 1))
+    return
+  }
+  initGource()
+}
+
 function initGource() {
   if (!diagramContainer.value || !currentSnapshot.value) return
 
@@ -274,6 +324,8 @@ function initGource() {
         g.attr('transform', event.transform)
       })
   )
+  // Prevent d3-zoom from blocking double-click on controls outside the SVG
+  svg.style('touch-action', 'none')
 
   const linksGroup = g.append('g').attr('class', 'links')
   const nodesGroup = g.append('g').attr('class', 'nodes')
@@ -450,12 +502,14 @@ function showTooltip(event: MouseEvent, data: TreeNode) {
   const wrapper = diagramContainer.value?.parentElement
   if (!wrapper) return
   const rect = wrapper.getBoundingClientRect()
+  const parts = data.path.split('/')
+  const dir = parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : ''
   tooltip.value = {
     visible: true,
     x: event.clientX - rect.left + 12,
     y: event.clientY - rect.top - 8,
     name: data.name,
-    path: data.path,
+    dir,
     kind: getFileKind(data),
   }
 }
@@ -491,6 +545,7 @@ function isExtensionHidden(ext: string | null): boolean {
 }
 
 watch(currentIndex, () => {
+  messageExpanded.value = false
   if (!diagramContainer.value) return
 
   const svg = d3.select(diagramContainer.value).select('svg')
@@ -560,24 +615,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  background: rgb(16, 185, 129);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  background: rgb(16, 185, 129);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
 .canvas-wrapper {
   position: relative;
   height: 500px;
