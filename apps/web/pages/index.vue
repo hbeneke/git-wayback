@@ -29,6 +29,7 @@
           <NuxtLink
             :to="`/${repo.fullName}`"
             class="flex items-center gap-3 py-3 group"
+            @click="saveToHistory(repo)"
           >
             <img
               :src="repo.owner.avatar"
@@ -62,6 +63,31 @@
       </p>
     </div>
 
+    <!-- Recent history -->
+    <section v-if="!searchQuery && history.length > 0" class="mt-8">
+      <h2 class="section-title mb-3">Recent</h2>
+      <ul class="divide-y divider">
+        <li v-for="repo in history" :key="repo.fullName" class="flex items-center gap-3 py-2">
+          <img
+            :src="repo.avatar"
+            :alt="repo.fullName"
+            class="w-5 h-5 rounded"
+          />
+          <NuxtLink :to="`/${repo.fullName}`" class="flex-1 min-w-0">
+            <span class="text-xs link-primary">{{ repo.fullName }}</span>
+          </NuxtLink>
+          <span class="text-[10px] text-[rgb(var(--muted))]">{{ formatRelativeDate(repo.visitedAt) }}</span>
+          <button
+            @click="removeFromHistory(repo.fullName)"
+            class="text-[10px] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))] transition-colors"
+            title="Remove"
+          >
+            &times;
+          </button>
+        </li>
+      </ul>
+    </section>
+
     <footer class="mt-16 pt-4 border-t divider text-center">
       <p class="text-xs text-[rgb(var(--muted))]">
         <a href="https://github.com/hbeneke/git-wayback" target="_blank" class="link-primary">git-wayback</a>
@@ -71,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatNumber, SEARCH_DEBOUNCE_MS } from '@git-wayback/shared'
+import { formatNumber, formatRelativeDate, SEARCH_DEBOUNCE_MS } from '@git-wayback/shared'
 
 useSeoMeta({
   title: 'git-wayback - Visualize GitHub Repository Evolution',
@@ -97,10 +123,53 @@ interface SearchResult {
   }
 }
 
+interface HistoryEntry {
+  fullName: string
+  avatar: string
+  visitedAt: string
+}
+
+const HISTORY_KEY = 'git-wayback-history'
+const MAX_HISTORY = 10
+
 const searchQuery = ref('')
 const results = ref<SearchResult[]>([])
 const isLoading = ref(false)
 const hasSearched = ref(false)
+const history = ref<HistoryEntry[]>([])
+
+onMounted(() => {
+  loadHistory()
+})
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (raw) history.value = JSON.parse(raw)
+  } catch {
+    history.value = []
+  }
+}
+
+function persistHistory() {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+}
+
+function saveToHistory(repo: SearchResult) {
+  const filtered = history.value.filter((h) => h.fullName !== repo.fullName)
+  filtered.unshift({
+    fullName: repo.fullName,
+    avatar: repo.owner.avatar,
+    visitedAt: new Date().toISOString(),
+  })
+  history.value = filtered.slice(0, MAX_HISTORY)
+  persistHistory()
+}
+
+function removeFromHistory(fullName: string) {
+  history.value = history.value.filter((h) => h.fullName !== fullName)
+  persistHistory()
+}
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
