@@ -2,16 +2,15 @@
   <slot v-if="!hasError" />
   <div v-else class="error-boundary">
     <slot name="fallback" :error="error" :reset="reset">
-      <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <p class="text-4xl mb-3">{{ icon }}</p>
-        <h3 class="text-lg font-semibold text-red-800 mb-2">{{ title }}</h3>
-        <p class="text-red-600 text-sm mb-4">{{ message }}</p>
+      <div class="py-8 text-center">
+        <h3 class="text-sm font-semibold mb-1">{{ title }}</h3>
+        <p class="text-xs text-[rgb(var(--muted))] mb-3">{{ message }}</p>
         <button
           v-if="showRetry"
           @click="reset"
-          class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+          class="text-xs link-primary"
         >
-          Try Again
+          Try again
         </button>
       </div>
     </slot>

@@ -1,8 +1,12 @@
 <template>
-  <main class="max-w-3xl mx-auto px-6 py-8">
-    <header class="text-center mb-12">
-      <h1 class="text-gradient text-4xl font-bold mb-2">git-wayback</h1>
-      <p class="text-gray-500 text-lg">Visualize the evolution of any GitHub repository.</p>
+  <main class="max-w-3xl mx-auto px-4 sm:px-8 pt-16 pb-12">
+    <header class="mb-8">
+      <h1 class="text-xl font-semibold">
+        git-wayback<span class="animate-blink">_</span>
+      </h1>
+      <p class="text-sm text-[rgb(var(--muted))] mt-1">
+        Visualize the evolution of any GitHub repository.
+      </p>
     </header>
 
     <div class="w-full">
@@ -10,43 +14,41 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search GitHub repositories... (e.g. vue, react, nuxt)"
-          class="w-full px-5 py-4 text-base border-2 border-gray-200 rounded-xl outline-none transition-all focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10"
+          placeholder="Search repositories..."
+          class="w-full px-3 py-2 text-sm bg-transparent border-b-2 border-[rgb(var(--border))] outline-none transition-colors focus:border-primary placeholder:text-[rgb(var(--muted))]"
           @input="debouncedSearch"
         />
         <div
           v-if="isLoading"
-          class="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 border-2 border-gray-200 border-t-brand-primary rounded-full animate-spin"
+          class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin"
         />
       </div>
 
-      <ul v-if="results.length > 0" class="border border-gray-200 rounded-xl overflow-hidden">
-        <li
-          v-for="repo in results"
-          :key="repo.id"
-          class="border-b border-gray-200 last:border-b-0"
-        >
+      <ul v-if="results.length > 0" class="divide-y divider">
+        <li v-for="repo in results" :key="repo.id">
           <NuxtLink
             :to="`/${repo.fullName}`"
-            class="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
+            class="flex items-center gap-3 py-3 group"
           >
             <img
               :src="repo.owner.avatar"
               :alt="repo.owner.login"
-              class="w-10 h-10 rounded-lg"
+              class="w-6 h-6 rounded"
             />
             <div class="flex-1 min-w-0">
-              <span class="block font-semibold text-gray-800">{{ repo.fullName }}</span>
+              <span class="text-sm font-medium link-primary group-hover:text-primary">
+                {{ repo.fullName }}
+              </span>
               <span
                 v-if="repo.description"
-                class="block text-sm text-gray-500 truncate"
+                class="block text-xs text-[rgb(var(--muted))] truncate mt-0.5"
               >
                 {{ repo.description }}
               </span>
             </div>
-            <div class="flex gap-3 text-sm text-gray-500">
-              <span class="whitespace-nowrap">⭐ {{ formatNumber(repo.stars) }}</span>
-              <span class="whitespace-nowrap">🍴 {{ formatNumber(repo.forks) }}</span>
+            <div class="flex gap-3 text-xs text-[rgb(var(--muted))]">
+              <span>{{ formatNumber(repo.stars) }} stars</span>
+              <span>{{ formatNumber(repo.forks) }} forks</span>
             </div>
           </NuxtLink>
         </li>
@@ -54,18 +56,23 @@
 
       <p
         v-else-if="searchQuery && !isLoading && hasSearched"
-        class="text-center text-gray-500 py-8"
+        class="text-xs text-[rgb(var(--muted))] py-8"
       >
         No repositories found for "{{ searchQuery }}"
       </p>
     </div>
+
+    <footer class="mt-16 pt-4 border-t divider text-center">
+      <p class="text-xs text-[rgb(var(--muted))]">
+        <a href="https://github.com/hbeneke/git-wayback" target="_blank" class="link-primary">git-wayback</a>
+      </p>
+    </footer>
   </main>
 </template>
 
 <script setup lang="ts">
 import { formatNumber, SEARCH_DEBOUNCE_MS } from '@git-wayback/shared'
 
-// SEO Meta
 useSeoMeta({
   title: 'git-wayback - Visualize GitHub Repository Evolution',
   description:

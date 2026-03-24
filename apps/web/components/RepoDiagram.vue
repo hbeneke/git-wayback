@@ -1,105 +1,87 @@
 <template>
   <div class="repo-diagram">
-    <!-- Loading State -->
-    <div v-if="loading" class="bg-gray-900 rounded-xl p-12 flex items-center justify-center min-h-[600px]">
-      <div class="text-center">
-        <div class="animate-spin w-10 h-10 border-3 border-white border-t-transparent rounded-full mx-auto mb-4"></div>
-        <p class="text-white font-medium">Loading repository evolution...</p>
-        <p class="text-sm text-gray-400 mt-1">This may take a moment</p>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="py-12 text-center">
+      <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
+      <p class="text-xs text-[rgb(var(--muted))] mt-3">Loading evolution data...</p>
     </div>
 
-    <!-- Error State -->
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-      <p class="text-red-600">{{ error }}</p>
-      <button @click="loadEvolution()" class="mt-3 text-sm text-red-700 underline">Try again</button>
+    <!-- Error -->
+    <div v-else-if="error" class="py-8">
+      <p class="text-xs text-red-400">{{ error }}</p>
+      <button @click="loadEvolution()" class="text-xs link-primary mt-2">Try again</button>
     </div>
 
-    <!-- No Tags State -->
-    <div v-else-if="snapshots.length === 0" class="bg-yellow-50 border border-yellow-200 rounded-xl p-12 text-center">
-      <p class="text-4xl mb-3">🏷️</p>
-      <h3 class="text-lg font-semibold text-yellow-800 mb-2">No version tags found</h3>
-      <p class="text-yellow-600 text-sm">This repository doesn't have any release tags yet.</p>
+    <!-- No Tags -->
+    <div v-else-if="snapshots.length === 0" class="py-12 text-center">
+      <p class="text-xs text-[rgb(var(--muted))]">No version tags found in this repository.</p>
     </div>
 
-    <!-- Main Content -->
+    <!-- Visualization -->
     <template v-else>
-      <!-- Gource Visualization -->
-      <div class="bg-gray-900 rounded-xl overflow-hidden">
+      <div class="border border-[rgb(var(--border))] rounded overflow-hidden">
         <!-- Header -->
-        <div class="p-4 border-b border-gray-800 flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <h3 class="font-semibold text-white">Repository Evolution</h3>
-            <span v-if="currentSnapshot" class="bg-brand-primary text-white text-sm font-semibold px-2 py-0.5 rounded">
+        <div class="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="section-title text-xs">Evolution</span>
+            <span v-if="currentSnapshot" class="text-primary text-xs font-semibold">
               {{ currentSnapshot.tag }}
             </span>
           </div>
-          <div class="flex items-center gap-3">
-            <span v-if="currentSnapshot" class="text-sm text-gray-400">
-              {{ currentSnapshot.stats.totalFiles }} files
-            </span>
-            <span v-if="currentSnapshot" class="text-xs text-gray-500">
-              {{ formatDate(currentSnapshot.date) }}
-            </span>
+          <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
+            <span v-if="currentSnapshot">{{ currentSnapshot.stats.totalFiles }} files</span>
+            <span v-if="currentSnapshot">{{ formatDate(currentSnapshot.date) }}</span>
           </div>
         </div>
-        
-        <!-- Canvas with Legend overlay -->
+
+        <!-- Canvas -->
         <div class="canvas-wrapper">
           <div ref="diagramContainer" class="gource-container"></div>
-          
-          <!-- Legend overlay (outside gource-container to avoid being removed by D3) -->
+
+          <!-- Legend -->
           <div class="legend-overlay">
-            <h4 class="text-xs font-semibold text-gray-700 mb-2">File Types</h4>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider mb-2">File types</h4>
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1">
               <button
                 v-for="(color, ext) in extensionColors"
                 :key="ext"
                 @click="toggleExtension(ext as string)"
-                class="legend-item"
-                :class="{ 'opacity-40': hiddenExtensions.has(ext as string) }"
+                class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
+                :class="{ 'opacity-30': hiddenExtensions.has(ext as string) }"
               >
-                <span 
-                  class="color-dot" 
-                  :style="{ backgroundColor: hiddenExtensions.has(ext as string) ? '#d1d5db' : color }"
-                ></span>
-                <span class="text-xs text-gray-700 font-medium">.{{ ext }}</span>
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: hiddenExtensions.has(ext as string) ? 'rgb(var(--muted))' : color }" />
+                <span class="text-[10px] text-[rgb(var(--foreground))]">.{{ ext }}</span>
               </button>
             </div>
           </div>
         </div>
-        
+
         <!-- Controls -->
-        <div class="p-4 border-t border-gray-800">
-          <div class="flex items-center gap-4">
-            <!-- Play/Pause -->
+        <div class="px-4 py-3 border-t border-[rgb(var(--border))]">
+          <div class="flex items-center gap-3">
             <button
               @click="togglePlay"
-              class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-              :class="isPlaying ? 'bg-brand-primary text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+              class="w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border"
+              :class="isPlaying
+                ? 'border-primary text-primary'
+                : 'border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]'"
             >
-              {{ isPlaying ? '⏸' : '▶' }}
+              {{ isPlaying ? '||' : '>' }}
             </button>
-            
-            <!-- Timeline Slider -->
-            <div class="flex-1">
-              <input
-                type="range"
-                v-model.number="currentIndex"
-                :min="0"
-                :max="snapshots.length - 1"
-                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-              />
-            </div>
-            
-            <!-- Version indicator -->
-            <div class="text-sm text-gray-400 min-w-[80px] text-right">
-              {{ currentIndex + 1 }} / {{ snapshots.length }}
-            </div>
+
+            <input
+              type="range"
+              v-model.number="currentIndex"
+              :min="0"
+              :max="snapshots.length - 1"
+              class="flex-1 h-1 bg-[rgb(var(--border))] rounded appearance-none cursor-pointer slider"
+            />
+
+            <span class="text-xs text-[rgb(var(--muted))] min-w-[50px] text-right">
+              {{ currentIndex + 1 }}/{{ snapshots.length }}
+            </span>
           </div>
-          
-          <!-- Version labels -->
-          <div class="flex justify-between mt-2 text-xs text-gray-500">
+          <div class="flex justify-between mt-1.5 text-[10px] text-[rgb(var(--muted))]">
             <span>{{ snapshots[0]?.tag }}</span>
             <span>{{ snapshots[snapshots.length - 1]?.tag }}</span>
           </div>
@@ -159,7 +141,6 @@ const props = defineProps<{
   repo: string
 }>()
 
-// State
 const snapshots = ref<TagSnapshot[]>([])
 const repoName = ref('')
 const currentIndex = ref(0)
@@ -170,7 +151,6 @@ const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
 let playInterval: ReturnType<typeof setInterval> | null = null
 
-// Extension colors
 const extensionColors: Record<string, string> = {
   ts: '#3178c6',
   js: '#f1e05a',
@@ -189,21 +169,19 @@ const extensionColors: Record<string, string> = {
 
 const currentSnapshot = computed(() => snapshots.value[currentIndex.value])
 
-// Load ALL evolution data in one call
 async function loadEvolution(forceRefresh = false) {
   loading.value = true
   error.value = null
-  
+
   try {
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
       query: { limit: 20, refresh: forceRefresh ? 'true' : undefined },
     })
-    
+
     snapshots.value = response.snapshots
     repoName.value = response.repoName
-    
+
     if (snapshots.value.length > 0) {
-      // Start at the first version so user sees the diagram immediately
       currentIndex.value = 0
       await nextTick()
       initGource()
@@ -215,7 +193,6 @@ async function loadEvolution(forceRefresh = false) {
   }
 }
 
-// Build tree structure from flat files
 function buildTree(files: FileNode[]): TreeNode {
   const root: TreeNode = {
     name: repoName.value,
@@ -256,7 +233,6 @@ function buildTree(files: FileNode[]): TreeNode {
   return root
 }
 
-// Initialize Gource-style visualization
 function initGource() {
   if (!diagramContainer.value || !currentSnapshot.value) return
 
@@ -266,10 +242,8 @@ function initGource() {
   const centerX = width / 2
   const centerY = height / 2
 
-  // Clear previous
   d3.select(container).selectAll('*').remove()
 
-  // Create SVG
   const svg = d3
     .select(container)
     .append('svg')
@@ -277,9 +251,8 @@ function initGource() {
     .attr('height', height)
     .attr('viewBox', [0, 0, width, height])
 
-  // Add zoom
   const g = svg.append('g')
-  
+
   svg.call(
     d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
@@ -288,11 +261,9 @@ function initGource() {
       })
   )
 
-  // Create layers
   const linksGroup = g.append('g').attr('class', 'links')
   const nodesGroup = g.append('g').attr('class', 'nodes')
 
-  // Build hierarchy and render
   renderTree(linksGroup, nodesGroup, width, height, centerX, centerY)
 }
 
@@ -309,7 +280,6 @@ function renderTree(
   const tree = buildTree(currentSnapshot.value.files)
   const root = d3.hierarchy(tree)
 
-  // Create radial tree layout
   const treeLayout = d3.tree<TreeNode>()
     .size([2 * Math.PI, Math.min(width, height) / 2 - 100])
     .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth)
@@ -318,24 +288,20 @@ function renderTree(
   const nodes = treeData.descendants()
   const links = treeData.links()
 
-  // Radial point function
   const radialPoint = (x: number, y: number): [number, number] => {
     return [(y) * Math.cos(x - Math.PI / 2) + centerX, (y) * Math.sin(x - Math.PI / 2) + centerY]
   }
 
-  // Filter out hidden extensions from nodes and links
   const visibleNodes = nodes.filter(d => {
     if (d.data.type === 'folder') return true
     return !isExtensionHidden(d.data.extension || null)
   })
-  
+
   const visibleLinks = links.filter(d => {
-    // Keep link if target is folder or visible file
     if (d.target.data.type === 'folder') return true
     return !isExtensionHidden(d.target.data.extension || null)
   })
 
-  // Update links
   const linkSelection = linksGroup
     .selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
     .data(visibleLinks, (d) => `${d.source.data.path}-${d.target.data.path}`)
@@ -349,7 +315,7 @@ function renderTree(
   const linkEnter = linkSelection.enter()
     .append('path')
     .attr('fill', 'none')
-    .attr('stroke', 'rgba(100, 120, 180, 0.3)')
+    .attr('stroke', 'rgba(16, 185, 129, 0.15)')
     .attr('stroke-width', 1)
     .attr('opacity', 0)
 
@@ -363,7 +329,6 @@ function renderTree(
       return `M${sx},${sy}L${tx},${ty}`
     })
 
-  // Update nodes
   const nodeSelection = nodesGroup
     .selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
     .data(visibleNodes, (d) => d.data.path || d.data.name)
@@ -378,13 +343,9 @@ function renderTree(
     .append('g')
     .attr('opacity', 0)
 
-  // Add circles to new nodes
   nodeEnter.append('circle')
-
-  // Add labels to folders
   nodeEnter.append('text')
 
-  // Merge and update all nodes
   const nodeUpdate = nodeEnter.merge(nodeSelection)
 
   nodeUpdate
@@ -396,24 +357,22 @@ function renderTree(
       return `translate(${x},${y})`
     })
 
-  // Update circles
   nodeUpdate.select('circle')
     .attr('r', (d) => {
       if (d.data.type === 'folder') {
-        return d.depth === 0 ? 8 : 4
+        return d.depth === 0 ? 6 : 3
       }
-      return Math.max(3, Math.min(8, Math.sqrt((d.data.size || 100) / 500)))
+      return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
     })
     .attr('fill', (d) => {
       if (d.data.type === 'folder') {
-        return d.depth === 0 ? '#fff' : 'rgba(255,255,255,0.5)'
+        return d.depth === 0 ? 'rgb(16, 185, 129)' : 'rgba(16, 185, 129, 0.4)'
       }
       return getExtensionColor(d.data.extension || null)
     })
-    .attr('stroke', (d) => d.data.type === 'folder' ? 'rgba(255,255,255,0.8)' : 'none')
+    .attr('stroke', (d) => d.data.type === 'folder' ? 'rgba(16, 185, 129, 0.6)' : 'none')
     .attr('stroke-width', 1)
 
-  // Update labels (only for root and top-level folders)
   nodeUpdate.select('text')
     .attr('dy', '0.31em')
     .attr('x', (d) => (d.x! < Math.PI) === !d.children ? 6 : -6)
@@ -423,21 +382,21 @@ function renderTree(
       const angle = (d.x! * 180) / Math.PI - 90
       return `rotate(${angle > 90 || angle < -90 ? angle + 180 : angle})`
     })
-    .attr('fill', 'rgba(255,255,255,0.7)')
-    .attr('font-size', (d) => d.depth === 0 ? 12 : 9)
+    .attr('fill', 'rgba(212, 212, 212, 0.7)')
+    .attr('font-size', (d) => d.depth === 0 ? 11 : 8)
+    .attr('font-family', 'JetBrains Mono, monospace')
     .text((d) => {
       if (d.depth === 0) return d.data.name
       if (d.depth === 1 && d.data.type === 'folder') return d.data.name
       return ''
     })
 
-  // Tooltips for files
   nodeUpdate
     .filter((d) => d.data.type === 'file')
     .select('circle')
     .style('cursor', 'pointer')
     .on('mouseover', function () {
-      d3.select(this).attr('stroke', '#fff').attr('stroke-width', 2)
+      d3.select(this).attr('stroke', 'rgb(16, 185, 129)').attr('stroke-width', 2)
     })
     .on('mouseout', function () {
       d3.select(this).attr('stroke', 'none')
@@ -463,7 +422,6 @@ function toggleExtension(ext: string) {
     newSet.add(ext)
   }
   hiddenExtensions.value = newSet
-  // Re-render to apply filter
   if (diagramContainer.value) {
     const svg = d3.select(diagramContainer.value).select('svg')
     if (!svg.empty()) {
@@ -486,10 +444,9 @@ function isExtensionHidden(ext: string | null): boolean {
   return hiddenExtensions.value.has('other')
 }
 
-// Watch for index changes - re-render with same SVG
 watch(currentIndex, () => {
   if (!diagramContainer.value) return
-  
+
   const svg = d3.select(diagramContainer.value).select('svg')
   if (svg.empty()) {
     initGource()
@@ -499,10 +456,10 @@ watch(currentIndex, () => {
   const g = svg.select<SVGGElement>('g')
   const linksGroup = g.select<SVGGElement>('.links')
   const nodesGroup = g.select<SVGGElement>('.nodes')
-  
+
   const width = diagramContainer.value.clientWidth || 900
   const height = DIAGRAM.HEIGHT
-  
+
   renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
 })
 
@@ -536,7 +493,6 @@ function stopPlay() {
   }
 }
 
-// Initialize and set up resize observer
 onMounted(() => {
   loadEvolution()
 
@@ -560,17 +516,17 @@ onMounted(() => {
 <style scoped>
 .slider::-webkit-slider-thumb {
   appearance: none;
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 12px;
+  height: 12px;
+  background: rgb(16, 185, 129);
   border-radius: 50%;
   cursor: pointer;
 }
 
 .slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 12px;
+  height: 12px;
+  background: rgb(16, 185, 129);
   border-radius: 50%;
   cursor: pointer;
   border: none;
@@ -578,50 +534,25 @@ onMounted(() => {
 
 .canvas-wrapper {
   position: relative;
-  height: 600px;
+  height: 500px;
 }
 
 .gource-container {
   width: 100%;
-  height: 600px;
-  background: radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f1a 100%);
+  height: 500px;
+  background: rgb(var(--bg));
+  background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
 }
 
 .legend-overlay {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 12px;
+  right: 12px;
   z-index: 20;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgb(var(--bg) / 0.9);
   backdrop-filter: blur(8px);
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.legend-item:hover {
-  background: #f3f4f6;
-}
-
-.color-dot {
-  width: 14px;
-  height: 14px;
-  min-width: 14px;
-  min-height: 14px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: inline-block;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgb(var(--border));
+  border-radius: 4px;
+  padding: 8px 10px;
 }
 </style>

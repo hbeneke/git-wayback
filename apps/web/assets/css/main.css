@@ -2,29 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;400;500;600;700&display=swap');
+
+:root {
+  --primary: 16 185 129;
+  --primary-hovered: 187 247 208;
+  --secondary: 250 204 21;
+  --secondary-hovered: 254 249 195;
+  --bg: 26 27 30;
+  --foreground: 212 212 212;
+  --muted: 156 163 175;
+  --border: 55 65 81;
+}
+
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    background-color: rgb(var(--bg));
+    color: rgb(var(--foreground));
+    font-size: 0.875rem;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   a {
-    @apply text-inherit no-underline;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background-color: rgb(var(--primary) / 0.2);
   }
 }
 
 @layer components {
-  .text-gradient {
-    @apply bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent;
+  .link-primary {
+    @apply text-primary font-bold transition-colors duration-200;
+  }
+  .link-primary:hover {
+    color: rgb(var(--primary-hovered));
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .nav-link {
+    @apply text-primary font-bold transition-colors duration-200;
+  }
+  .nav-link:hover {
+    color: rgb(var(--primary-hovered));
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-underline-offset: 4px;
+  }
+
+  .link-secondary {
+    @apply text-secondary transition-colors duration-200;
+  }
+  .link-secondary:hover {
+    color: rgb(var(--secondary-hovered));
+  }
+
+  .section-title {
+    @apply text-secondary font-semibold text-sm uppercase tracking-wider;
+  }
+
+  .divider {
+    border-color: rgb(var(--border));
+    @apply border-dashed;
   }
 }
 
-/* Transiciones de página */
-.page-enter-active,
-.page-leave-active {
-  @apply transition-opacity duration-150 ease-out;
+/* Blinking cursor */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-start infinite;
 }
 
+/* Page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease-out;
+}
 .page-enter-from,
 .page-leave-to {
-  @apply opacity-0;
+  opacity: 0;
 }
