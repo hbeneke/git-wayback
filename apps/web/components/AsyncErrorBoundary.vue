@@ -14,13 +14,9 @@
     </template>
     <template #fallback>
       <slot name="loading">
-        <div class="flex items-center justify-center py-12">
-          <div class="text-center">
-            <div
-              class="animate-spin w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full mx-auto mb-3"
-            />
-            <p class="text-gray-500 text-sm">{{ loadingText }}</p>
-          </div>
+        <div class="py-12 text-center">
+          <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin mb-3" />
+          <p class="text-xs text-[rgb(var(--muted))]">{{ loadingText }}</p>
         </div>
       </slot>
     </template>

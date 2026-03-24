@@ -9,6 +9,23 @@ interface GitHubTag {
   }
 }
 
+interface GitHubRef {
+  ref: string
+  object: {
+    sha: string
+    type: 'commit' | 'tag'
+  }
+}
+
+interface GitHubAnnotatedTag {
+  tag: string
+  message: string
+  object: {
+    sha: string
+    type: string
+  }
+}
+
 interface GitHubCommitDetail {
   sha: string
   commit: {
@@ -65,8 +82,8 @@ async function fetchFromGitHub(
     const batchResults = await Promise.all(
       batch.map(async (tag) => {
         try {
-          // Get commit details and tree in parallel
-          const [commitDetail, treeResponse] = await Promise.all([
+          // Get commit details, tree, and try to get annotated tag message in parallel
+          const [commitDetail, treeResponse, tagMessage] = await Promise.all([
             $fetch<GitHubCommitDetail>(
               `https://api.github.com/repos/${owner}/${repo}/commits/${tag.commit.sha}`,
               { headers }
@@ -78,7 +95,27 @@ async function fetchFromGitHub(
                 query: { recursive: '1' },
               }
             ),
+            // Try to get annotated tag message via git ref
+            $fetch<GitHubRef>(
+              `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${tag.name}`,
+              { headers }
+            )
+              .then(async (ref) => {
+                if (ref.object.type === 'tag') {
+                  // It's an annotated tag — fetch the tag object for its message
+                  const annotated = await $fetch<GitHubAnnotatedTag>(
+                    `https://api.github.com/repos/${owner}/${repo}/git/tags/${ref.object.sha}`,
+                    { headers }
+                  )
+                  return annotated.message?.trim() || null
+                }
+                return null // Lightweight tag, no message
+              })
+              .catch(() => null),
           ])
+
+          // Use annotated tag message if available, otherwise full commit message
+          const message = tagMessage || commitDetail.commit.message
 
           // Process files
           const files = treeResponse.tree
@@ -100,7 +137,7 @@ async function fetchFromGitHub(
             tag: tag.name,
             sha: tag.commit.sha,
             date: commitDetail.commit.author.date,
-            message: commitDetail.commit.message.split('\n')[0],
+            message,
             files,
             stats: {
               totalFiles: files.length,
