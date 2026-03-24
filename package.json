@@ -17,6 +17,8 @@
     "sync:minor": "node scripts/sync-master.mjs --minor",
     "sync:patch": "node scripts/sync-master.mjs --patch",
     "sync:no-tag": "node scripts/sync-master.mjs --no-tag",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "node scripts/uninstall-hooks.mjs",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
