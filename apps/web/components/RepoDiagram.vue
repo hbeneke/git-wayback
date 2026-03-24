@@ -38,6 +38,17 @@
         <div class="canvas-wrapper">
           <div ref="diagramContainer" class="gource-container"></div>
 
+          <!-- File tooltip -->
+          <div
+            v-if="tooltip.visible"
+            class="file-tooltip"
+            :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
+          >
+            <span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span>
+            <span class="text-[rgb(var(--muted))]">{{ tooltip.path }}</span>
+            <span class="text-primary text-[10px]">{{ tooltip.kind }}</span>
+          </div>
+
           <!-- Legend -->
           <div class="legend-overlay">
             <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider mb-2">File types</h4>
@@ -149,6 +160,9 @@ const error = ref<string | null>(null)
 const diagramContainer = ref<HTMLElement | null>(null)
 const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
+const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; path: string; kind: string }>({
+  visible: false, x: 0, y: 0, name: '', path: '', kind: '',
+})
 let playInterval: ReturnType<typeof setInterval> | null = null
 
 const extensionColors: Record<string, string> = {
@@ -392,26 +406,58 @@ function renderTree(
     })
 
   nodeUpdate
-    .filter((d) => d.data.type === 'file')
     .select('circle')
     .style('cursor', 'pointer')
-    .on('mouseover', function () {
+    .on('mouseover', function (event, d) {
       d3.select(this).attr('stroke', 'rgb(16, 185, 129)').attr('stroke-width', 2)
+      showTooltip(event, d.data)
+    })
+    .on('mousemove', function (event, d) {
+      showTooltip(event, d.data)
     })
     .on('mouseout', function () {
-      d3.select(this).attr('stroke', 'none')
+      d3.select(this).attr('stroke', (d: any) => d.data.type === 'folder' ? 'rgba(16, 185, 129, 0.6)' : 'none')
+      tooltip.value.visible = false
     })
-
-  nodeUpdate.selectAll('title').remove()
-  nodeUpdate
-    .filter((d) => d.data.type === 'file')
-    .append('title')
-    .text((d) => `${d.data.name}\n${d.data.path}`)
+    .on('click', function (event, d) {
+      event.stopPropagation()
+      showTooltip(event, d.data)
+    })
 }
 
 function getExtensionColor(ext: string | null): string {
   if (!ext) return extensionColors.other
   return extensionColors[ext.toLowerCase()] || extensionColors.other
+}
+
+function getFileKind(data: TreeNode): string {
+  if (data.type === 'folder') return 'folder'
+  if (!data.extension) return 'file'
+  const ext = data.extension.toLowerCase()
+  const kinds: Record<string, string> = {
+    ts: 'typescript', js: 'javascript', vue: 'vue component',
+    json: 'json', md: 'markdown', css: 'stylesheet', html: 'html',
+    py: 'python', go: 'go', rs: 'rust', yaml: 'yaml config',
+    yml: 'yaml config', sh: 'shell script', tsx: 'typescript jsx',
+    jsx: 'javascript jsx', svg: 'svg image', png: 'image', jpg: 'image',
+    gif: 'image', toml: 'toml config', lock: 'lockfile',
+    gitignore: 'git config', env: 'env config', sql: 'sql',
+  }
+  return kinds[ext] || ext + ' file'
+}
+
+function showTooltip(event: MouseEvent, data: TreeNode) {
+  const wrapper = diagramContainer.value?.parentElement
+  if (!wrapper) return
+  const rect = wrapper.getBoundingClientRect()
+  tooltip.value = {
+    visible: true,
+    x: event.clientX - rect.left + 12,
+    y: event.clientY - rect.top - 8,
+    name: data.name,
+    path: data.path,
+    kind: getFileKind(data),
+  }
 }
 
 function toggleExtension(ext: string) {
@@ -542,6 +588,26 @@ onMounted(() => {
   height: 500px;
   background: rgb(var(--bg));
   background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
+}
+
+.file-tooltip {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  background: rgb(var(--bg) / 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgb(var(--border));
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .legend-overlay {
