@@ -1,11 +1,5 @@
 <template>
-  <main class="max-w-3xl mx-auto px-4 sm:px-8 pt-16 pb-12">
-    <nav class="mb-8">
-      <NuxtLink to="/" class="nav-link text-xs">
-        &larr; back
-      </NuxtLink>
-    </nav>
-
+  <main class="max-w-5xl mx-auto px-4 sm:px-8 pt-8 pb-12">
     <!-- Loading -->
     <div v-if="pending" class="py-20 text-center">
       <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
@@ -43,37 +37,19 @@
         </div>
       </header>
 
-      <!-- Navigation -->
-      <nav class="flex divide-x divider mb-8 text-xs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          @click="activeTab = tab.id"
-          :class="[
-            'px-3 py-1 first:pl-0 transition-colors',
-            activeTab === tab.id
-              ? 'text-primary font-bold'
-              : 'text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]'
-          ]"
-        >
-          {{ tab.label }}
-          <span v-if="tab.badge" class="text-secondary ml-1">{{ tab.badge }}</span>
-        </button>
-      </nav>
+      <TabPanel v-model="activeTab" :tabs="tabs">
+        <template #evolution>
+          <ErrorBoundary
+            title="Visualization Error"
+            message="Failed to render the repository evolution diagram."
+            icon="!"
+          >
+            <RepoDiagram :owner="owner" :repo="repo" />
+          </ErrorBoundary>
+        </template>
 
-      <!-- Tab: Evolution -->
-      <div v-show="activeTab === 'evolution'">
-        <ErrorBoundary
-          title="Visualization Error"
-          message="Failed to render the repository evolution diagram."
-          icon="!"
-        >
-          <RepoDiagram :owner="owner" :repo="repo" />
-        </ErrorBoundary>
-      </div>
-
-      <!-- Tab: Details -->
-      <div v-show="activeTab === 'details'" class="space-y-8">
+        <template #details>
+          <div class="space-y-8">
 
         <!-- About -->
         <section>
@@ -245,17 +221,18 @@
             </div>
           </section>
         </template>
-      </div>
+          </div>
+        </template>
 
-      <!-- Tab: Screenshots -->
-      <div v-show="activeTab === 'screenshots'">
-        <section class="py-12 text-center">
-          <p class="text-xs text-[rgb(var(--muted))]">
-            Visual screenshots of the application at different points in time.
-          </p>
-          <p class="text-xs text-secondary mt-2">Coming soon</p>
-        </section>
-      </div>
+        <template #screenshots>
+          <section class="py-12 text-center">
+            <p class="text-xs text-[rgb(var(--muted))]">
+              Visual screenshots of the application at different points in time.
+            </p>
+            <p class="text-xs text-secondary mt-2">Coming soon</p>
+          </section>
+        </template>
+      </TabPanel>
     </template>
   </main>
 </template>
