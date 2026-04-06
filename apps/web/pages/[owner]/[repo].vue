@@ -1,11 +1,5 @@
 <template>
-  <main class="max-w-3xl mx-auto px-4 sm:px-8 pt-16 pb-12">
-    <nav class="mb-8">
-      <NuxtLink to="/" class="nav-link text-xs">
-        &larr; back
-      </NuxtLink>
-    </nav>
-
+  <main class="max-w-5xl mx-auto px-4 sm:px-8 pt-8 pb-12">
     <!-- Loading -->
     <div v-if="pending" class="py-20 text-center">
       <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
