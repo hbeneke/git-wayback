@@ -37,37 +37,41 @@
         </div>
       </header>
 
-      <!-- Navigation -->
-      <nav class="flex divide-x divider mb-8 text-xs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          @click="activeTab = tab.id"
-          :class="[
-            'px-3 py-1 first:pl-0 transition-colors',
-            activeTab === tab.id
-              ? 'text-primary font-bold'
-              : 'text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]'
-          ]"
-        >
-          {{ tab.label }}
-          <span v-if="tab.badge" class="text-secondary ml-1">{{ tab.badge }}</span>
-        </button>
-      </nav>
+      <!-- Tabs + Panel -->
+      <div>
+        <!-- Tab buttons -->
+        <nav class="flex gap-0 text-xs relative" style="margin-bottom: -1px;">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            @click="activeTab = tab.id"
+            :class="[
+              'px-4 py-2 rounded-t border transition-colors relative',
+              activeTab === tab.id
+                ? 'bg-[rgb(var(--bg))] border-[rgb(var(--border))] border-b-[rgb(var(--bg))] text-primary font-bold z-10'
+                : 'bg-[rgb(var(--border)/.15)] border-transparent text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))] hover:bg-[rgb(var(--border)/.25)]'
+            ]"
+          >
+            {{ tab.label }}
+            <span v-if="tab.badge" class="text-secondary ml-1">{{ tab.badge }}</span>
+          </button>
+        </nav>
 
-      <!-- Tab: Evolution -->
-      <div v-show="activeTab === 'evolution'">
-        <ErrorBoundary
-          title="Visualization Error"
-          message="Failed to render the repository evolution diagram."
-          icon="!"
-        >
-          <RepoDiagram :owner="owner" :repo="repo" />
-        </ErrorBoundary>
-      </div>
+        <!-- Panel -->
+        <div class="border border-[rgb(var(--border))] rounded-b rounded-tr p-5">
+          <!-- Tab: Evolution -->
+          <div v-show="activeTab === 'evolution'">
+            <ErrorBoundary
+              title="Visualization Error"
+              message="Failed to render the repository evolution diagram."
+              icon="!"
+            >
+              <RepoDiagram :owner="owner" :repo="repo" />
+            </ErrorBoundary>
+          </div>
 
-      <!-- Tab: Details -->
-      <div v-show="activeTab === 'details'" class="space-y-8">
+          <!-- Tab: Details -->
+          <div v-show="activeTab === 'details'" class="space-y-8">
 
         <!-- About -->
         <section>
@@ -241,14 +245,16 @@
         </template>
       </div>
 
-      <!-- Tab: Screenshots -->
-      <div v-show="activeTab === 'screenshots'">
-        <section class="py-12 text-center">
-          <p class="text-xs text-[rgb(var(--muted))]">
-            Visual screenshots of the application at different points in time.
-          </p>
-          <p class="text-xs text-secondary mt-2">Coming soon</p>
-        </section>
+          <!-- Tab: Screenshots -->
+          <div v-show="activeTab === 'screenshots'">
+            <section class="py-12 text-center">
+              <p class="text-xs text-[rgb(var(--muted))]">
+                Visual screenshots of the application at different points in time.
+              </p>
+              <p class="text-xs text-secondary mt-2">Coming soon</p>
+            </section>
+          </div>
+        </div>
       </div>
     </template>
   </main>
