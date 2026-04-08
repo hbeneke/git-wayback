@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background -->
+  <rect width="64" height="64" rx="8" fill="#f7df1e"/>
+  <!-- Hourglass -->
+  <line x1="16" y1="8" x2="48" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <line x1="16" y1="56" x2="48" y2="56" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <path d="M19 11 L19 24 L32 32 L19 40 L19 53" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M45 11 L45 24 L32 32 L45 40 L45 53" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Sand top -->
+  <polygon points="22,22 42,22 32,30" fill="#000" opacity="0.3"/>
+  <!-- Sand bottom -->
+  <rect x="22" y="48" width="20" height="5" fill="#000" opacity="0.3"/>
+</svg>
