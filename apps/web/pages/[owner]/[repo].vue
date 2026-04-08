@@ -307,6 +307,20 @@ const { data, pending, error } = await useFetch<RepoData>(
   }
 )
 
+onMounted(() => {
+  if (!data.value) return
+  const visitorId = useVisitorId()
+  if (!visitorId) return
+  $fetch('/api/visits', {
+    method: 'POST',
+    body: {
+      visitorId,
+      repoFullName: data.value.fullName,
+      repoAvatar: `https://github.com/${owner.value}.png`,
+    },
+  }).catch(() => {})
+})
+
 const languageColors: Record<string, string> = {
   TypeScript: '#3178c6',
   JavaScript: '#f1e05a',
