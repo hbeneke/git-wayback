@@ -337,7 +337,7 @@ function initGource() {
 
   svg.call(
     d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.2, 10])
       .on('zoom', (event) => {
         g.attr('transform', event.transform)
       })
@@ -366,7 +366,7 @@ function renderTree(
 
   const treeLayout = d3.tree<TreeNode>()
     .size([2 * Math.PI, Math.min(width, height) / 2 - 100])
-    .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth)
+    .separation((a, b) => (a.parent === b.parent ? 4 : 7) / a.depth)
 
   const treeData = treeLayout(root)
   const nodes = treeData.descendants()
@@ -403,7 +403,9 @@ function renderTree(
     .attr('stroke-width', 1)
     .attr('opacity', 0)
 
-  linkEnter.merge(linkSelection)
+  const linkMerged = linkEnter.merge(linkSelection)
+
+  linkMerged
     .transition()
     .duration(D3_TRANSITION_DURATION_MS)
     .attr('opacity', 1)
@@ -411,6 +413,30 @@ function renderTree(
       const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
       const [tx, ty] = radialPoint(d.target.x!, d.target.y!)
       return `M${sx},${sy}L${tx},${ty}`
+    })
+
+  linkMerged
+    .style('cursor', 'pointer')
+    .style('pointer-events', 'visibleStroke')
+    .on('mouseover', function (event, d) {
+      const color = getNodeColor(d.target.data)
+      d3.select(this)
+        .transition().duration(HOVER_TRANSITION_MS)
+        .attr('stroke', color)
+        .attr('stroke-width', 1.25)
+      highlightNodeCircle(nodesGroup, d.target.data)
+      showTooltip(event, d.target.data)
+    })
+    .on('mousemove', function (event, d) {
+      showTooltip(event, d.target.data)
+    })
+    .on('mouseout', function (_event, d) {
+      d3.select(this)
+        .transition().duration(HOVER_TRANSITION_MS)
+        .attr('stroke', 'rgba(16, 185, 129, 0.15)')
+        .attr('stroke-width', 1)
+      unhighlightNodeCircle(nodesGroup, d.target.data)
+      tooltip.value.visible = false
     })
 
   const nodeSelection = nodesGroup
@@ -427,8 +453,7 @@ function renderTree(
     .append('g')
     .attr('opacity', 0)
 
-  nodeEnter.append('circle')
-  nodeEnter.append('text')
+  nodeEnter.append('circle').attr('class', 'main')
 
   const nodeUpdate = nodeEnter.merge(nodeSelection)
 
@@ -441,58 +466,48 @@ function renderTree(
       return `translate(${x},${y})`
     })
 
-  nodeUpdate.select('circle')
-    .attr('r', (d) => {
-      if (d.data.type === 'folder') {
-        return d.depth === 0 ? 6 : 3
-      }
-      return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
-    })
+  nodeUpdate.select('circle.main')
+    .attr('r', (d) => getNodeRadius(d))
     .attr('fill', (d) => {
       if (d.data.type === 'folder') {
         return d.depth === 0 ? 'rgb(16, 185, 129)' : 'rgba(16, 185, 129, 0.4)'
       }
       return getExtensionColor(d.data.extension || null)
     })
-    .attr('stroke', (d) => d.data.type === 'folder' ? 'rgba(16, 185, 129, 0.6)' : 'none')
+    .attr('stroke', (d) => darken(getNodeColor(d.data), 0.75))
     .attr('stroke-width', 1)
 
-  nodeUpdate.select('text')
-    .attr('dy', '0.31em')
-    .attr('x', (d) => (d.x! < Math.PI) === !d.children ? 6 : -6)
-    .attr('text-anchor', (d) => (d.x! < Math.PI) === !d.children ? 'start' : 'end')
-    .attr('transform', (d) => {
-      if (d.depth === 0) return ''
-      const angle = (d.x! * 180) / Math.PI - 90
-      return `rotate(${angle > 90 || angle < -90 ? angle + 180 : angle})`
-    })
-    .attr('fill', 'rgba(212, 212, 212, 0.7)')
-    .attr('font-size', (d) => d.depth === 0 ? 11 : 8)
-    .attr('font-family', 'JetBrains Mono, monospace')
-    .text((d) => {
-      if (d.depth === 0) return d.data.name
-      if (d.depth === 1 && d.data.type === 'folder') return d.data.name
-      return ''
-    })
-
   nodeUpdate
-    .select('circle')
+    .select('circle.main')
     .style('cursor', 'pointer')
     .on('mouseover', function (event, d) {
-      d3.select(this).attr('stroke', 'rgb(16, 185, 129)').attr('stroke-width', 2)
+      d3.select(this)
+        .transition().duration(HOVER_TRANSITION_MS)
+        .attr('r', getNodeRadius(d) * HOVER_SCALE)
+      highlightParentLink(linksGroup, d.data)
       showTooltip(event, d.data)
     })
     .on('mousemove', function (event, d) {
       showTooltip(event, d.data)
     })
-    .on('mouseout', function () {
-      d3.select(this).attr('stroke', (d: any) => d.data.type === 'folder' ? 'rgba(16, 185, 129, 0.6)' : 'none')
+    .on('mouseout', function (_event, d) {
+      d3.select(this)
+        .transition().duration(HOVER_TRANSITION_MS)
+        .attr('r', getNodeRadius(d))
+      unhighlightParentLink(linksGroup, d.data)
       tooltip.value.visible = false
     })
     .on('click', function (event, d) {
       event.stopPropagation()
       showTooltip(event, d.data)
     })
+}
+
+function getNodeRadius(d: d3.HierarchyNode<TreeNode>): number {
+  if (d.data.type === 'folder') {
+    return d.depth === 0 ? 6 : 3
+  }
+  return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
 }
 
 function getExtensionColor(ext: string | null): string {
@@ -514,6 +529,99 @@ function getFileKind(data: TreeNode): string {
     gitignore: 'git config', env: 'env config', sql: 'sql',
   }
   return kinds[ext] || ext + ' file'
+}
+
+function getNodeColor(data: TreeNode): string {
+  if (data.type === 'folder') return 'rgb(16, 185, 129)'
+  return getExtensionColor(data.extension || null)
+}
+
+function highlightParentLink(
+  linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  data: TreeNode,
+) {
+  linksGroup.selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
+    .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
+    .transition().duration(HOVER_TRANSITION_MS)
+    .attr('stroke', getNodeColor(data))
+    .attr('stroke-width', 1.25)
+}
+
+function unhighlightParentLink(
+  linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  data: TreeNode,
+) {
+  linksGroup.selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
+    .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
+    .transition().duration(HOVER_TRANSITION_MS)
+    .attr('stroke', 'rgba(16, 185, 129, 0.15)')
+    .attr('stroke-width', 1)
+}
+
+function parseRgb(color: string): [number, number, number] | null {
+  if (color.startsWith('#')) {
+    const hex = color.slice(1)
+    const n = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex
+    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)]
+  }
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+  if (m) return [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])]
+  return null
+}
+
+function darken(color: string, factor: number): string {
+  const rgb = parseRgb(color)
+  if (!rgb) return color
+  return `rgb(${Math.round(rgb[0] * factor)}, ${Math.round(rgb[1] * factor)}, ${Math.round(rgb[2] * factor)})`
+}
+
+function withAlpha(color: string, alpha: number): string {
+  if (color.startsWith('#')) {
+    const hex = color.slice(1)
+    const n = hex.length === 3
+      ? hex.split('').map((c) => c + c).join('')
+      : hex
+    const r = parseInt(n.slice(0, 2), 16)
+    const g = parseInt(n.slice(2, 4), 16)
+    const b = parseInt(n.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+  const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
+  if (rgbMatch) {
+    return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${alpha})`
+  }
+  return color
+}
+
+const HOVER_TRANSITION_MS = 300
+const HOVER_SCALE = 2.2
+
+function highlightNodeCircle(
+  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  data: TreeNode,
+) {
+  nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
+    .filter((d) => (d.data.path || d.data.name) === (data.path || data.name))
+    .select<SVGCircleElement>('circle.main')
+    .transition().duration(HOVER_TRANSITION_MS)
+    .attr('r', function () {
+      const d = d3.select(this).datum() as d3.HierarchyNode<TreeNode>
+      return getNodeRadius(d) * HOVER_SCALE
+    })
+}
+
+function unhighlightNodeCircle(
+  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  data: TreeNode,
+) {
+  nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
+    .filter((d) => (d.data.path || d.data.name) === (data.path || data.name))
+    .select<SVGCircleElement>('circle.main')
+    .transition().duration(HOVER_TRANSITION_MS)
+    .attr('r', function () {
+      const d = d3.select(this).datum() as d3.HierarchyNode<TreeNode>
+      return getNodeRadius(d)
+    })
 }
 
 function showTooltip(event: MouseEvent, data: TreeNode) {
