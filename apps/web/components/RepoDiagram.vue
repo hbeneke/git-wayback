@@ -39,15 +39,33 @@
           v-if="currentSnapshot?.message"
           class="px-4 py-2 border-b border-[rgb(var(--border))] relative z-10"
         >
-          <div class="flex items-start gap-3">
-            <pre v-if="messageExpanded" class="flex-1 text-[11px] text-[rgb(var(--muted))] whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">{{ currentSnapshot.message.trim() }}</pre>
-            <p v-else class="flex-1 text-[11px] text-[rgb(var(--muted))] truncate">{{ tagFirstLine }}</p>
+          <div v-if="messageExpanded" class="flex items-start gap-3">
+            <pre class="flex-1 text-[11px] text-[rgb(var(--muted))] whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">{{ currentSnapshot.message.trim() }}</pre>
+            <button
+              @click.stop="messageExpanded = false"
+              aria-label="Collapse message"
+              title="Collapse"
+              class="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[rgb(var(--muted))] hover:text-primary hover:bg-[rgb(var(--border))] transition-colors"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <path d="M1 5h8" />
+              </svg>
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-2 min-w-0">
+            <p class="flex-1 text-[11px] text-[rgb(var(--muted))] truncate min-w-0">{{ tagFirstLine }}</p>
             <button
               v-if="tagIsMultiline"
-              @click.stop="messageExpanded = !messageExpanded"
-              class="text-[10px] text-primary shrink-0 hover:text-[rgb(var(--primary-hovered))]"
+              @click.stop="messageExpanded = true"
+              aria-label="Expand message"
+              title="Show full message"
+              class="shrink-0 inline-flex items-center justify-center px-1.5 h-5 rounded border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-primary hover:border-primary transition-colors"
             >
-              {{ messageExpanded ? 'collapse' : 'expand' }}
+              <svg width="14" height="4" viewBox="0 0 14 4" fill="currentColor">
+                <circle cx="2" cy="2" r="1.2" />
+                <circle cx="7" cy="2" r="1.2" />
+                <circle cx="12" cy="2" r="1.2" />
+              </svg>
             </button>
           </div>
         </div>
