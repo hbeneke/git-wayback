@@ -36,6 +36,12 @@ export const RATE_LIMITS = {
     windowSec: 60,
     prefix: 'evolution',
   },
+  /** Visit tracking (strict to prevent ranking inflation) */
+  visits: {
+    maxRequests: 5,
+    windowSec: 60,
+    prefix: 'visits',
+  },
   /** Health checks (lenient) */
   health: {
     maxRequests: 300,

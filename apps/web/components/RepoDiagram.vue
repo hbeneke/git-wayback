@@ -89,7 +89,7 @@
             <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider mb-2">File types</h4>
             <div class="grid grid-cols-2 gap-x-3 gap-y-1">
               <button
-                v-for="(color, ext) in extensionColors"
+                v-for="(color, ext) in EXTENSION_COLORS"
                 :key="ext"
                 @click="toggleExtension(ext as string)"
                 class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
@@ -154,49 +154,9 @@
 </template>
 
 <script setup lang="ts">
-import * as d3 from 'd3'
-import {
-  formatDate,
-  DIAGRAM,
-  D3_TRANSITION_DURATION_MS,
-  D3_EXIT_TRANSITION_DURATION_MS,
-  TIMELINE_PLAYBACK_INTERVAL_MS,
-} from '@git-wayback/shared'
-
-interface FileNode {
-  path: string
-  name: string
-  size: number
-  extension: string | null
-}
-
-interface TagSnapshot {
-  tag: string
-  sha: string
-  date: string
-  message: string
-  files: FileNode[]
-  stats: {
-    totalFiles: number
-    totalSize: number
-  }
-}
-
-interface EvolutionResponse {
-  snapshots: TagSnapshot[]
-  repoName: string
-  cached: boolean
-  capturedAt: string
-}
-
-interface TreeNode {
-  name: string
-  path: string
-  type: 'file' | 'folder'
-  extension?: string | null
-  size?: number
-  children: TreeNode[]
-}
+import { formatDate } from '@git-wayback/shared'
+import type { TagSnapshot, EvolutionResponse } from '~/composables/useDiagramTree'
+import { EXTENSION_COLORS } from '~/composables/useDiagramTree'
 
 const props = defineProps<{
   owner: string
@@ -209,52 +169,38 @@ const currentIndex = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const diagramContainer = ref<HTMLElement | null>(null)
-const isPlaying = ref(false)
 const hiddenExtensions = ref<Set<string>>(new Set())
 const hoveredIndex = ref<number | null>(null)
 const messageExpanded = ref(false)
 const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
   visible: false, x: 0, y: 0, name: '', dir: '', kind: '',
 })
-let playInterval: ReturnType<typeof setInterval> | null = null
-
-const extensionColors: Record<string, string> = {
-  ts: '#3178c6',
-  js: '#f1e05a',
-  vue: '#41b883',
-  json: '#cbcb41',
-  md: '#083fa1',
-  css: '#563d7c',
-  html: '#e34c26',
-  py: '#3572A5',
-  go: '#00ADD8',
-  rs: '#dea584',
-  yaml: '#cb171e',
-  sh: '#89e051',
-  other: '#6b7280',
-}
 
 const currentSnapshot = computed(() => snapshots.value[currentIndex.value])
 const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split('\n')[0] || '')
 const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
+const totalSnapshots = computed(() => snapshots.value.length)
 
-async function loadEvolution(forceRefresh = false) {
+const { isPlaying, togglePlay, stopPlay } = useDiagramPlayback(currentIndex, totalSnapshots)
+const { initGource, retryInitGource, updateTree } = useDiagramRenderer(
+  diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip,
+)
+
+async function loadEvolution() {
   loading.value = true
   error.value = null
 
   try {
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
-      query: { limit: 20, refresh: forceRefresh ? 'true' : undefined },
+      query: { limit: 20 },
     })
 
     snapshots.value = response.snapshots
     repoName.value = response.repoName
 
     if (snapshots.value.length > 0) {
-      // Start at the first snapshot that has files
       const firstWithFiles = snapshots.value.findIndex((s) => s.files.length > 0)
       currentIndex.value = firstWithFiles >= 0 ? firstWithFiles : 0
-      // Wait for DOM to fully render (v-show conditional + container sizing)
       await nextTick()
       await nextTick()
       retryInitGource()
@@ -266,380 +212,6 @@ async function loadEvolution(forceRefresh = false) {
   }
 }
 
-function buildTree(files: FileNode[]): TreeNode {
-  const root: TreeNode = {
-    name: repoName.value,
-    path: '',
-    type: 'folder',
-    children: [],
-  }
-
-  for (const file of files) {
-    const parts = file.path.split('/')
-    let current = root
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]
-      const isFile = i === parts.length - 1
-      const path = parts.slice(0, i + 1).join('/')
-
-      if (isFile) {
-        current.children.push({
-          name: part,
-          path: file.path,
-          type: 'file',
-          extension: file.extension,
-          size: file.size,
-          children: [],
-        })
-      } else {
-        let child = current.children.find((c) => c.name === part && c.type === 'folder')
-        if (!child) {
-          child = { name: part, path, type: 'folder', children: [] }
-          current.children.push(child)
-        }
-        current = child
-      }
-    }
-  }
-
-  return root
-}
-
-function retryInitGource(attempts = 0) {
-  if (!diagramContainer.value || !currentSnapshot.value) return
-  if (diagramContainer.value.clientWidth === 0 && attempts < 10) {
-    requestAnimationFrame(() => retryInitGource(attempts + 1))
-    return
-  }
-  initGource()
-}
-
-function initGource() {
-  if (!diagramContainer.value || !currentSnapshot.value) return
-
-  const container = diagramContainer.value
-  const width = container.clientWidth || DIAGRAM.DEFAULT_WIDTH
-  const height = DIAGRAM.HEIGHT
-  const centerX = width / 2
-  const centerY = height / 2
-
-  d3.select(container).selectAll('*').remove()
-
-  const svg = d3
-    .select(container)
-    .append('svg')
-    .attr('width', width)
-    .attr('height', height)
-    .attr('viewBox', [0, 0, width, height])
-
-  const g = svg.append('g')
-
-  svg.call(
-    d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 10])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform)
-      })
-  )
-  // Prevent d3-zoom from blocking double-click on controls outside the SVG
-  svg.style('touch-action', 'none')
-
-  const linksGroup = g.append('g').attr('class', 'links')
-  const nodesGroup = g.append('g').attr('class', 'nodes')
-
-  renderTree(linksGroup, nodesGroup, width, height, centerX, centerY)
-}
-
-function renderTree(
-  linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  width: number,
-  height: number,
-  centerX: number,
-  centerY: number
-) {
-  if (!currentSnapshot.value) return
-
-  const tree = buildTree(currentSnapshot.value.files)
-  const root = d3.hierarchy(tree)
-
-  const treeLayout = d3.tree<TreeNode>()
-    .size([2 * Math.PI, Math.min(width, height) / 2 - 100])
-    .separation((a, b) => (a.parent === b.parent ? 4 : 7) / a.depth)
-
-  const treeData = treeLayout(root)
-  const nodes = treeData.descendants()
-  const links = treeData.links()
-
-  const radialPoint = (x: number, y: number): [number, number] => {
-    return [(y) * Math.cos(x - Math.PI / 2) + centerX, (y) * Math.sin(x - Math.PI / 2) + centerY]
-  }
-
-  const visibleNodes = nodes.filter(d => {
-    if (d.data.type === 'folder') return true
-    return !isExtensionHidden(d.data.extension || null)
-  })
-
-  const visibleLinks = links.filter(d => {
-    if (d.target.data.type === 'folder') return true
-    return !isExtensionHidden(d.target.data.extension || null)
-  })
-
-  const linkSelection = linksGroup
-    .selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
-    .data(visibleLinks, (d) => `${d.source.data.path}-${d.target.data.path}`)
-
-  linkSelection.exit()
-    .transition()
-    .duration(D3_EXIT_TRANSITION_DURATION_MS)
-    .attr('opacity', 0)
-    .remove()
-
-  const linkEnter = linkSelection.enter()
-    .append('path')
-    .attr('fill', 'none')
-    .attr('stroke', 'rgba(16, 185, 129, 0.15)')
-    .attr('stroke-width', 1)
-    .attr('opacity', 0)
-
-  const linkMerged = linkEnter.merge(linkSelection)
-
-  linkMerged
-    .transition()
-    .duration(D3_TRANSITION_DURATION_MS)
-    .attr('opacity', 1)
-    .attr('d', (d) => {
-      const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
-      const [tx, ty] = radialPoint(d.target.x!, d.target.y!)
-      return `M${sx},${sy}L${tx},${ty}`
-    })
-
-  linkMerged
-    .style('cursor', 'pointer')
-    .style('pointer-events', 'visibleStroke')
-    .on('mouseover', function (event, d) {
-      const color = getNodeColor(d.target.data)
-      d3.select(this)
-        .transition().duration(HOVER_TRANSITION_MS)
-        .attr('stroke', color)
-        .attr('stroke-width', 1.25)
-      highlightNodeCircle(nodesGroup, d.target.data)
-      showTooltip(event, d.target.data)
-    })
-    .on('mousemove', function (event, d) {
-      showTooltip(event, d.target.data)
-    })
-    .on('mouseout', function (_event, d) {
-      d3.select(this)
-        .transition().duration(HOVER_TRANSITION_MS)
-        .attr('stroke', 'rgba(16, 185, 129, 0.15)')
-        .attr('stroke-width', 1)
-      unhighlightNodeCircle(nodesGroup, d.target.data)
-      tooltip.value.visible = false
-    })
-
-  const nodeSelection = nodesGroup
-    .selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
-    .data(visibleNodes, (d) => d.data.path || d.data.name)
-
-  nodeSelection.exit()
-    .transition()
-    .duration(D3_EXIT_TRANSITION_DURATION_MS)
-    .attr('opacity', 0)
-    .remove()
-
-  const nodeEnter = nodeSelection.enter()
-    .append('g')
-    .attr('opacity', 0)
-
-  nodeEnter.append('circle').attr('class', 'main')
-
-  const nodeUpdate = nodeEnter.merge(nodeSelection)
-
-  nodeUpdate
-    .transition()
-    .duration(D3_TRANSITION_DURATION_MS)
-    .attr('opacity', 1)
-    .attr('transform', (d) => {
-      const [x, y] = radialPoint(d.x!, d.y!)
-      return `translate(${x},${y})`
-    })
-
-  nodeUpdate.select('circle.main')
-    .attr('r', (d) => getNodeRadius(d))
-    .attr('fill', (d) => {
-      if (d.data.type === 'folder') {
-        return d.depth === 0 ? 'rgb(16, 185, 129)' : 'rgba(16, 185, 129, 0.4)'
-      }
-      return getExtensionColor(d.data.extension || null)
-    })
-    .attr('stroke', (d) => darken(getNodeColor(d.data), 0.75))
-    .attr('stroke-width', 1)
-
-  nodeUpdate
-    .select('circle.main')
-    .style('cursor', 'pointer')
-    .on('mouseover', function (event, d) {
-      d3.select(this)
-        .transition().duration(HOVER_TRANSITION_MS)
-        .attr('r', getNodeRadius(d) * HOVER_SCALE)
-      highlightParentLink(linksGroup, d.data)
-      showTooltip(event, d.data)
-    })
-    .on('mousemove', function (event, d) {
-      showTooltip(event, d.data)
-    })
-    .on('mouseout', function (_event, d) {
-      d3.select(this)
-        .transition().duration(HOVER_TRANSITION_MS)
-        .attr('r', getNodeRadius(d))
-      unhighlightParentLink(linksGroup, d.data)
-      tooltip.value.visible = false
-    })
-    .on('click', function (event, d) {
-      event.stopPropagation()
-      showTooltip(event, d.data)
-    })
-}
-
-function getNodeRadius(d: d3.HierarchyNode<TreeNode>): number {
-  if (d.data.type === 'folder') {
-    return d.depth === 0 ? 6 : 3
-  }
-  return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
-}
-
-function getExtensionColor(ext: string | null): string {
-  if (!ext) return extensionColors.other
-  return extensionColors[ext.toLowerCase()] || extensionColors.other
-}
-
-function getFileKind(data: TreeNode): string {
-  if (data.type === 'folder') return 'folder'
-  if (!data.extension) return 'file'
-  const ext = data.extension.toLowerCase()
-  const kinds: Record<string, string> = {
-    ts: 'typescript', js: 'javascript', vue: 'vue component',
-    json: 'json', md: 'markdown', css: 'stylesheet', html: 'html',
-    py: 'python', go: 'go', rs: 'rust', yaml: 'yaml config',
-    yml: 'yaml config', sh: 'shell script', tsx: 'typescript jsx',
-    jsx: 'javascript jsx', svg: 'svg image', png: 'image', jpg: 'image',
-    gif: 'image', toml: 'toml config', lock: 'lockfile',
-    gitignore: 'git config', env: 'env config', sql: 'sql',
-  }
-  return kinds[ext] || ext + ' file'
-}
-
-function getNodeColor(data: TreeNode): string {
-  if (data.type === 'folder') return 'rgb(16, 185, 129)'
-  return getExtensionColor(data.extension || null)
-}
-
-function highlightParentLink(
-  linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  data: TreeNode,
-) {
-  linksGroup.selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
-    .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
-    .transition().duration(HOVER_TRANSITION_MS)
-    .attr('stroke', getNodeColor(data))
-    .attr('stroke-width', 1.25)
-}
-
-function unhighlightParentLink(
-  linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  data: TreeNode,
-) {
-  linksGroup.selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
-    .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
-    .transition().duration(HOVER_TRANSITION_MS)
-    .attr('stroke', 'rgba(16, 185, 129, 0.15)')
-    .attr('stroke-width', 1)
-}
-
-function parseRgb(color: string): [number, number, number] | null {
-  if (color.startsWith('#')) {
-    const hex = color.slice(1)
-    const n = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex
-    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)]
-  }
-  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-  if (m) return [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])]
-  return null
-}
-
-function darken(color: string, factor: number): string {
-  const rgb = parseRgb(color)
-  if (!rgb) return color
-  return `rgb(${Math.round(rgb[0] * factor)}, ${Math.round(rgb[1] * factor)}, ${Math.round(rgb[2] * factor)})`
-}
-
-function withAlpha(color: string, alpha: number): string {
-  if (color.startsWith('#')) {
-    const hex = color.slice(1)
-    const n = hex.length === 3
-      ? hex.split('').map((c) => c + c).join('')
-      : hex
-    const r = parseInt(n.slice(0, 2), 16)
-    const g = parseInt(n.slice(2, 4), 16)
-    const b = parseInt(n.slice(4, 6), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-  }
-  const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
-  if (rgbMatch) {
-    return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${alpha})`
-  }
-  return color
-}
-
-const HOVER_TRANSITION_MS = 300
-const HOVER_SCALE = 2.2
-
-function highlightNodeCircle(
-  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  data: TreeNode,
-) {
-  nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
-    .filter((d) => (d.data.path || d.data.name) === (data.path || data.name))
-    .select<SVGCircleElement>('circle.main')
-    .transition().duration(HOVER_TRANSITION_MS)
-    .attr('r', function () {
-      const d = d3.select(this).datum() as d3.HierarchyNode<TreeNode>
-      return getNodeRadius(d) * HOVER_SCALE
-    })
-}
-
-function unhighlightNodeCircle(
-  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  data: TreeNode,
-) {
-  nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
-    .filter((d) => (d.data.path || d.data.name) === (data.path || data.name))
-    .select<SVGCircleElement>('circle.main')
-    .transition().duration(HOVER_TRANSITION_MS)
-    .attr('r', function () {
-      const d = d3.select(this).datum() as d3.HierarchyNode<TreeNode>
-      return getNodeRadius(d)
-    })
-}
-
-function showTooltip(event: MouseEvent, data: TreeNode) {
-  const wrapper = diagramContainer.value?.parentElement
-  if (!wrapper) return
-  const rect = wrapper.getBoundingClientRect()
-  const parts = data.path.split('/')
-  const dir = parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : ''
-  tooltip.value = {
-    visible: true,
-    x: event.clientX - rect.left + 12,
-    y: event.clientY - rect.top - 8,
-    name: data.name,
-    dir,
-    kind: getFileKind(data),
-  }
-}
-
 function toggleExtension(ext: string) {
   const newSet = new Set(hiddenExtensions.value)
   if (newSet.has(ext)) {
@@ -648,77 +220,13 @@ function toggleExtension(ext: string) {
     newSet.add(ext)
   }
   hiddenExtensions.value = newSet
-  if (diagramContainer.value) {
-    const svg = d3.select(diagramContainer.value).select('svg')
-    if (!svg.empty()) {
-      const g = svg.select<SVGGElement>('g')
-      const linksGroup = g.select<SVGGElement>('.links')
-      const nodesGroup = g.select<SVGGElement>('.nodes')
-      const width = diagramContainer.value.clientWidth || 900
-      const height = DIAGRAM.HEIGHT
-      renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
-    }
-  }
-}
-
-function isExtensionHidden(ext: string | null): boolean {
-  if (!ext) return hiddenExtensions.value.has('other')
-  const normalizedExt = ext.toLowerCase()
-  if (extensionColors[normalizedExt]) {
-    return hiddenExtensions.value.has(normalizedExt)
-  }
-  return hiddenExtensions.value.has('other')
+  updateTree()
 }
 
 watch(currentIndex, () => {
   messageExpanded.value = false
-  if (!diagramContainer.value) return
-
-  const svg = d3.select(diagramContainer.value).select('svg')
-  if (svg.empty()) {
-    initGource()
-    return
-  }
-
-  const g = svg.select<SVGGElement>('g')
-  const linksGroup = g.select<SVGGElement>('.links')
-  const nodesGroup = g.select<SVGGElement>('.nodes')
-
-  const width = diagramContainer.value.clientWidth || 900
-  const height = DIAGRAM.HEIGHT
-
-  renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
+  updateTree()
 })
-
-function togglePlay() {
-  if (isPlaying.value) {
-    stopPlay()
-  } else {
-    startPlay()
-  }
-}
-
-function startPlay() {
-  isPlaying.value = true
-  if (currentIndex.value >= snapshots.value.length - 1) {
-    currentIndex.value = 0
-  }
-  playInterval = setInterval(() => {
-    if (currentIndex.value < snapshots.value.length - 1) {
-      currentIndex.value++
-    } else {
-      stopPlay()
-    }
-  }, TIMELINE_PLAYBACK_INTERVAL_MS)
-}
-
-function stopPlay() {
-  isPlaying.value = false
-  if (playInterval) {
-    clearInterval(playInterval)
-    playInterval = null
-  }
-}
 
 onMounted(() => {
   loadEvolution()

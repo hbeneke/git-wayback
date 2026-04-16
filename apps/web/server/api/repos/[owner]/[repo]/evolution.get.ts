@@ -167,13 +167,12 @@ export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
   const limit = Math.min(Number(query.limit) || EVOLUTION.DEFAULT_LIMIT, EVOLUTION.MAX_LIMIT)
-  const forceRefresh = query.refresh === 'true'
 
   const repoId = `${owner}/${repo}`
   const db = createDb(getDatabaseUrl())
 
   // 1. Check if we have cached data
-  if (!forceRefresh) {
+  {
     const cached = await db
       .select()
       .from(evolutionSnapshots)
@@ -183,11 +182,11 @@ export default defineEventHandler(async (event) => {
     if (cached.length > 0) {
       const cacheAge = Date.now() - new Date(cached[0].capturedAt).getTime()
 
-      // If cache is still fresh, return it
+      // If cache is still fresh, return it (slice to requested limit)
       if (cacheAge < EVOLUTION_CACHE_DURATION_MS) {
         logger.evolution.debug(`Cache hit for ${repoId}`, { ageMinutes: Math.round(cacheAge / 1000 / 60) })
         return {
-          snapshots: cached[0].snapshots,
+          snapshots: (cached[0].snapshots as EvolutionSnapshotData[]).slice(0, limit),
           repoName: repo,
           cached: true,
           capturedAt: cached[0].capturedAt,
@@ -198,9 +197,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // 2. Fetch from GitHub
+  // 2. Fetch from GitHub (always fetch MAX_LIMIT so cache is complete)
   logger.evolution.info(`Fetching from GitHub: ${repoId}`)
-  const snapshots = await fetchFromGitHub(owner, repo, limit)
+  const snapshots = await fetchFromGitHub(owner, repo, EVOLUTION.MAX_LIMIT)
 
   // 3. Save to database (upsert)
   if (snapshots.length > 0) {
@@ -232,7 +231,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    snapshots,
+    snapshots: snapshots.slice(0, limit),
     repoName: repo,
     cached: false,
     capturedAt: new Date(),

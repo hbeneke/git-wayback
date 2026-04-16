@@ -47,8 +47,7 @@ interface SearchResult {
   }
 }
 
-const HISTORY_KEY = 'git-wayback-history'
-const MAX_HISTORY = 10
+const { addEntry } = useRepoHistory()
 
 const containerRef = ref<HTMLElement | null>(null)
 const query = ref('')
@@ -84,26 +83,10 @@ function onInput() {
 }
 
 function onSelect(repo: SearchResult) {
-  saveToHistory(repo)
+  addEntry({ fullName: repo.fullName, avatar: repo.owner.avatar })
   isOpen.value = false
   query.value = ''
   results.value = []
-}
-
-function saveToHistory(repo: SearchResult) {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    const history: Array<{ fullName: string; avatar: string; visitedAt: string }> = raw ? JSON.parse(raw) : []
-    const filtered = history.filter((h) => h.fullName !== repo.fullName)
-    filtered.unshift({
-      fullName: repo.fullName,
-      avatar: repo.owner.avatar,
-      visitedAt: new Date().toISOString(),
-    })
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(filtered.slice(0, MAX_HISTORY)))
-  } catch {
-    // localStorage unavailable
-  }
 }
 
 function onClickOutside(e: MouseEvent) {

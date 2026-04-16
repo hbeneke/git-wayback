@@ -15,6 +15,8 @@ export default defineEventHandler(async (event) => {
     await applyRateLimit(event, RATE_LIMITS.health)
   } else if (path === '/api/search') {
     await applyRateLimit(event, RATE_LIMITS.search)
+  } else if (path === '/api/visits') {
+    await applyRateLimit(event, RATE_LIMITS.visits)
   } else if (path.includes('/evolution')) {
     await applyRateLimit(event, RATE_LIMITS.evolution)
   } else {
