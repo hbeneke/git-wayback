@@ -12,7 +12,7 @@
         </NuxtLink>
         <span class="text-[10px] text-[rgb(var(--muted))]">{{ formatRelativeDate(repo.visitedAt) }}</span>
         <button
-          @click="removeFromHistory(repo.fullName)"
+          @click="removeEntry(repo.fullName)"
           class="text-[10px] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))] transition-colors"
           title="Remove"
         >
@@ -27,29 +27,7 @@
 <script setup lang="ts">
 import { formatRelativeDate } from '@git-wayback/shared'
 
-const HISTORY_KEY = 'git-wayback-history'
-
-interface HistoryEntry {
-  fullName: string
-  avatar: string
-  visitedAt: string
-}
-
-const history = ref<HistoryEntry[]>([])
-
-onMounted(() => {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    if (raw) history.value = JSON.parse(raw)
-  } catch {
-    history.value = []
-  }
-})
-
-function removeFromHistory(fullName: string) {
-  history.value = history.value.filter((h) => h.fullName !== fullName)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
-}
+const { history, removeEntry } = useRepoHistory()
 
 useSeoMeta({ title: 'Recent repositories — git-wayback' })
 </script>
