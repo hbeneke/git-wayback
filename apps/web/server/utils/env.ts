@@ -6,6 +6,8 @@
 interface EnvConfig {
   databaseUrl: string
   githubToken: string | null
+  upstashRedisRestUrl: string | null
+  upstashRedisRestToken: string | null
 }
 
 let cachedConfig: EnvConfig | null = null
@@ -49,6 +51,8 @@ export function getEnvConfig(): EnvConfig {
   cachedConfig = {
     databaseUrl: requireEnv('DATABASE_URL'),
     githubToken: optionalEnv('GITHUB_TOKEN'),
+    upstashRedisRestUrl: optionalEnv('UPSTASH_REDIS_REST_URL'),
+    upstashRedisRestToken: optionalEnv('UPSTASH_REDIS_REST_TOKEN'),
   }
 
   return cachedConfig

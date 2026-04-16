@@ -1,4 +1,6 @@
 import type { H3Event } from 'h3'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
 
 /**
  * Rate limiter configuration.
@@ -6,75 +8,10 @@ import type { H3Event } from 'h3'
 export interface RateLimitConfig {
   /** Maximum requests allowed in the window */
   maxRequests: number
-  /** Time window in milliseconds */
-  windowMs: number
-  /** Custom key generator (defaults to IP-based) */
-  keyGenerator?: (event: H3Event) => string
-  /** Custom response when rate limited */
-  message?: string
-}
-
-interface RateLimitEntry {
-  count: number
-  resetAt: number
-}
-
-/**
- * In-memory rate limit store.
- * In production, consider using Redis for distributed rate limiting.
- */
-const rateLimitStore = new Map<string, RateLimitEntry>()
-
-/** Cleanup interval for expired entries (5 minutes) */
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000
-
-/** Track if cleanup is scheduled */
-let cleanupScheduled = false
-
-/**
- * Removes expired rate limit entries to prevent memory leaks.
- */
-function cleanupExpiredEntries(): void {
-  const now = Date.now()
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (entry.resetAt <= now) {
-      rateLimitStore.delete(key)
-    }
-  }
-}
-
-/**
- * Schedules periodic cleanup of expired entries.
- */
-function scheduleCleanup(): void {
-  if (cleanupScheduled) return
-  cleanupScheduled = true
-
-  setInterval(() => {
-    cleanupExpiredEntries()
-  }, CLEANUP_INTERVAL_MS)
-}
-
-/**
- * Extracts client IP from the request.
- */
-function getClientIp(event: H3Event): string {
-  const headers = getHeaders(event)
-
-  // Check common proxy headers
-  const forwarded = headers['x-forwarded-for']
-  if (forwarded) {
-    const ips = forwarded.split(',')
-    return ips[0].trim()
-  }
-
-  const realIp = headers['x-real-ip']
-  if (realIp) {
-    return realIp
-  }
-
-  // Fallback to remote address
-  return event.node.req.socket.remoteAddress || 'unknown'
+  /** Time window in seconds */
+  windowSec: number
+  /** Prefix for the rate limit key */
+  prefix: string
 }
 
 /**
@@ -84,94 +21,110 @@ export const RATE_LIMITS = {
   /** Standard API endpoints */
   api: {
     maxRequests: 100,
-    windowMs: 60 * 1000, // 1 minute
+    windowSec: 60,
+    prefix: 'api',
   },
   /** Search endpoints (more expensive) */
   search: {
     maxRequests: 30,
-    windowMs: 60 * 1000, // 1 minute
+    windowSec: 60,
+    prefix: 'search',
   },
   /** Evolution data (GitHub API intensive) */
   evolution: {
     maxRequests: 20,
-    windowMs: 60 * 1000, // 1 minute
+    windowSec: 60,
+    prefix: 'evolution',
   },
   /** Health checks (lenient) */
   health: {
     maxRequests: 300,
-    windowMs: 60 * 1000, // 1 minute
+    windowSec: 60,
+    prefix: 'health',
   },
 } as const
 
 /**
- * Checks and updates rate limit for a request.
- * Returns true if the request should be allowed, false if rate limited.
+ * Creates an Upstash Redis-backed rate limiter.
+ * Falls back to allowing all requests if Upstash is not configured.
  */
-export function checkRateLimit(
-  event: H3Event,
-  config: RateLimitConfig
-): { allowed: boolean; remaining: number; resetAt: number } {
-  scheduleCleanup()
+function createUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
+  const url = getEnvConfig().upstashRedisRestUrl
+  const token = getEnvConfig().upstashRedisRestToken
 
-  const now = Date.now()
-  const key = config.keyGenerator?.(event) ?? getClientIp(event)
-  const prefixedKey = `${event.path}:${key}`
-
-  let entry = rateLimitStore.get(prefixedKey)
-
-  // Create new entry if doesn't exist or window has passed
-  if (!entry || entry.resetAt <= now) {
-    entry = {
-      count: 0,
-      resetAt: now + config.windowMs,
-    }
+  if (!url || !token) {
+    return null
   }
 
-  entry.count++
-  rateLimitStore.set(prefixedKey, entry)
+  return new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(config.maxRequests, `${config.windowSec} s`),
+    prefix: `ratelimit:${config.prefix}`,
+  })
+}
 
-  const remaining = Math.max(0, config.maxRequests - entry.count)
-  const allowed = entry.count <= config.maxRequests
+/** Cache limiter instances to avoid re-creating them on every request */
+const limiterCache = new Map<string, Ratelimit | null>()
 
-  return {
-    allowed,
-    remaining,
-    resetAt: entry.resetAt,
+function getLimiter(config: RateLimitConfig): Ratelimit | null {
+  if (!limiterCache.has(config.prefix)) {
+    limiterCache.set(config.prefix, createUpstashLimiter(config))
   }
+  return limiterCache.get(config.prefix)!
+}
+
+/**
+ * Extracts client IP from the request.
+ */
+function getClientIp(event: H3Event): string {
+  const headers = getHeaders(event)
+
+  const forwarded = headers['x-forwarded-for']
+  if (forwarded) {
+    return forwarded.split(',')[0].trim()
+  }
+
+  const realIp = headers['x-real-ip']
+  if (realIp) {
+    return realIp
+  }
+
+  return event.node.req.socket.remoteAddress || 'unknown'
 }
 
 /**
  * Applies rate limiting to an event handler.
- * Throws 429 Too Many Requests if limit exceeded.
+ * Uses Upstash Redis for distributed rate limiting across serverless instances.
+ * If Upstash is not configured, allows all requests (development fallback).
  */
-export function applyRateLimit(
+export async function applyRateLimit(
   event: H3Event,
   config: RateLimitConfig = RATE_LIMITS.api
-): void {
-  const result = checkRateLimit(event, config)
+): Promise<void> {
+  const limiter = getLimiter(config)
 
-  // Set rate limit headers
+  if (!limiter) {
+    // Upstash not configured — skip rate limiting (dev mode)
+    return
+  }
+
+  const ip = getClientIp(event)
+  const { success, remaining, reset } = await limiter.limit(ip)
+
   setHeaders(event, {
     'X-RateLimit-Limit': String(config.maxRequests),
-    'X-RateLimit-Remaining': String(result.remaining),
-    'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
+    'X-RateLimit-Remaining': String(remaining),
+    'X-RateLimit-Reset': String(Math.ceil(reset / 1000)),
   })
 
-  if (!result.allowed) {
+  if (!success) {
     throw createError({
       statusCode: 429,
       statusMessage: 'Too Many Requests',
-      message: config.message ?? 'Rate limit exceeded. Please try again later.',
+      message: 'Rate limit exceeded. Please try again later.',
       data: {
-        retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000),
+        retryAfter: Math.ceil((reset - Date.now()) / 1000),
       },
     })
   }
-}
-
-/**
- * Creates a rate limit middleware for specific configurations.
- */
-export function createRateLimiter(config: RateLimitConfig) {
-  return (event: H3Event) => applyRateLimit(event, config)
 }
