@@ -238,13 +238,13 @@ const currentSnapshot = computed(() => snapshots.value[currentIndex.value])
 const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split('\n')[0] || '')
 const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
 
-async function loadEvolution(forceRefresh = false) {
+async function loadEvolution() {
   loading.value = true
   error.value = null
 
   try {
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
-      query: { limit: 20, refresh: forceRefresh ? 'true' : undefined },
+      query: { limit: 20 },
     })
 
     snapshots.value = response.snapshots

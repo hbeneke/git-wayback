@@ -167,13 +167,12 @@ export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
   const limit = Math.min(Number(query.limit) || EVOLUTION.DEFAULT_LIMIT, EVOLUTION.MAX_LIMIT)
-  const forceRefresh = query.refresh === 'true'
 
   const repoId = `${owner}/${repo}`
   const db = createDb(getDatabaseUrl())
 
   // 1. Check if we have cached data
-  if (!forceRefresh) {
+  {
     const cached = await db
       .select()
       .from(evolutionSnapshots)
