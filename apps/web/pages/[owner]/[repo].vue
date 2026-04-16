@@ -309,12 +309,9 @@ const { data, pending, error } = await useFetch<RepoData>(
 
 onMounted(() => {
   if (!data.value) return
-  const visitorId = useVisitorId()
-  if (!visitorId) return
   $fetch('/api/visits', {
     method: 'POST',
     body: {
-      visitorId,
       repoFullName: data.value.fullName,
       repoAvatar: `https://github.com/${owner.value}.png`,
     },
