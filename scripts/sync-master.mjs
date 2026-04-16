@@ -121,6 +121,25 @@ if (!noTag) {
 console.log("Returning to develop...");
 exec("git checkout develop");
 
+// Sync version back to develop so it stays in sync with master
+const masterPkg = execSilent("git show master:package.json");
+const masterVersion = masterPkg ? JSON.parse(masterPkg).version : null;
+const developVersion = JSON.parse(readFileSync("./package.json", "utf8")).version;
+
+if (masterVersion && masterVersion !== developVersion) {
+  console.log(`Syncing version in develop: ${developVersion} → ${masterVersion}`);
+  const { writeFileSync } = await import("node:fs");
+  const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
+  pkg.version = masterVersion;
+  writeFileSync("./package.json", JSON.stringify(pkg, null, 2) + "\n");
+  execSync("git add package.json", { stdio: "pipe" });
+  execSync(`git commit -m "chore: sync version to ${masterVersion} after sync"`, {
+    stdio: "inherit",
+    env: { ...process.env, SKIP_VERSION_BUMP: "1" },
+  });
+  exec("git push origin develop");
+}
+
 console.log("\nSync completed!");
 
 if (noTag) {
