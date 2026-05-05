@@ -23,7 +23,11 @@ export function useDiagramRenderer(
   repoName: Ref<string>,
   hiddenExtensions: Ref<Set<string>>,
   tooltip: Ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>,
+  hoveredGraphPath: Ref<string | null>,
+  onNodeClick: (path: string) => void,
 ) {
+  let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
+  let svgRoot: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
   function getNodeRadius(d: d3.HierarchyNode<TreeNode>): number {
     if (d.data.type === 'folder') {
       return d.depth === 0 ? 6 : 3
@@ -182,6 +186,7 @@ export function useDiagramRenderer(
           .attr('stroke-width', 1.25)
         highlightNodeCircle(nodesGroup, d.target.data)
         showTooltip(event, d.target.data)
+        hoveredGraphPath.value = d.target.data.path || d.target.data.name
       })
       .on('mousemove', function (event, d) {
         showTooltip(event, d.target.data)
@@ -193,6 +198,7 @@ export function useDiagramRenderer(
           .attr('stroke-width', 1)
         unhighlightNodeCircle(nodesGroup, d.target.data)
         tooltip.value.visible = false
+        hoveredGraphPath.value = null
       })
 
     // --- Nodes ---
@@ -243,6 +249,7 @@ export function useDiagramRenderer(
           .attr('r', getNodeRadius(d) * HOVER_SCALE)
         highlightParentLink(linksGroup, d.data)
         showTooltip(event, d.data)
+        hoveredGraphPath.value = d.data.path || d.data.name
       })
       .on('mousemove', function (event, d) {
         showTooltip(event, d.data)
@@ -253,10 +260,12 @@ export function useDiagramRenderer(
           .attr('r', getNodeRadius(d))
         unhighlightParentLink(linksGroup, d.data)
         tooltip.value.visible = false
+        hoveredGraphPath.value = null
       })
       .on('click', function (event, d) {
         event.stopPropagation()
         showTooltip(event, d.data)
+        onNodeClick(d.data.path || d.data.name)
       })
   }
 
@@ -280,14 +289,14 @@ export function useDiagramRenderer(
 
     const g = svg.append('g')
 
-    svg.call(
-      d3.zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.2, 10])
-        .on('zoom', (event) => {
-          g.attr('transform', event.transform)
-        })
-    )
+    zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 10])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform)
+      })
+    svg.call(zoomBehavior)
     svg.style('touch-action', 'none')
+    svgRoot = svg
 
     const linksGroup = g.append('g').attr('class', 'links')
     const nodesGroup = g.append('g').attr('class', 'nodes')
@@ -323,9 +332,82 @@ export function useDiagramRenderer(
     renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
   }
 
+  function getDiagramGroups() {
+    if (!diagramContainer.value) return null
+    const svg = d3.select(diagramContainer.value).select<SVGSVGElement>('svg')
+    if (svg.empty()) return null
+    const g = svg.select<SVGGElement>('g')
+    const linksGroup = g.select<SVGGElement>('.links')
+    const nodesGroup = g.select<SVGGElement>('.nodes')
+    if (linksGroup.empty() || nodesGroup.empty()) return null
+    return { linksGroup, nodesGroup }
+  }
+
+  function highlightByPath(path: string) {
+    const groups = getDiagramGroups()
+    if (!groups) return
+    const { linksGroup, nodesGroup } = groups
+
+    nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
+      .filter((d) => (d.data.path || d.data.name) === path)
+      .each(function (d) {
+        d3.select(this).select<SVGCircleElement>('circle.main')
+          .transition().duration(HOVER_TRANSITION_MS)
+          .attr('r', getNodeRadius(d) * HOVER_SCALE)
+        highlightParentLink(linksGroup, d.data)
+      })
+  }
+
+  function unhighlightByPath(path: string) {
+    const groups = getDiagramGroups()
+    if (!groups) return
+    const { linksGroup, nodesGroup } = groups
+
+    nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
+      .filter((d) => (d.data.path || d.data.name) === path)
+      .each(function (d) {
+        d3.select(this).select<SVGCircleElement>('circle.main')
+          .transition().duration(HOVER_TRANSITION_MS)
+          .attr('r', getNodeRadius(d))
+        unhighlightParentLink(linksGroup, d.data)
+      })
+  }
+
+  function zoomToPath(path: string) {
+    if (!svgRoot || !zoomBehavior || !diagramContainer.value) return
+    const groups = getDiagramGroups()
+    if (!groups) return
+    const { nodesGroup } = groups
+
+    let target: { x: number; y: number } | null = null
+    nodesGroup.selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
+      .filter((d) => (d.data.path || d.data.name) === path)
+      .each(function () {
+        const t = d3.select(this).attr('transform') || ''
+        const m = /translate\(([-\d.eE]+)[ ,]+([-\d.eE]+)\)/.exec(t)
+        if (m) target = { x: parseFloat(m[1]), y: parseFloat(m[2]) }
+      })
+
+    if (!target) return
+
+    const width = diagramContainer.value.clientWidth || DIAGRAM.DEFAULT_WIDTH
+    const height = DIAGRAM.HEIGHT
+    const scale = 2.5
+    const tx = width / 2 - target.x * scale
+    const ty = height / 2 - target.y * scale
+
+    svgRoot.transition()
+      .duration(700)
+      .ease(d3.easeCubicInOut)
+      .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+  }
+
   return {
     initGource,
     retryInitGource,
     updateTree,
+    highlightByPath,
+    unhighlightByPath,
+    zoomToPath,
   }
 }
