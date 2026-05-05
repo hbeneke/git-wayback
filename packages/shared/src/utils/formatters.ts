@@ -97,22 +97,3 @@ export function formatUrl(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
-/**
- * Calculates proportional bar height for chart visualization.
- * Returns a pixel height based on the value's proportion to the maximum in the array.
- *
- * @param value - The current value to calculate height for
- * @param values - Array of all values (used to determine maximum)
- * @param maxHeight - Maximum bar height in pixels (default: 60)
- *
- * @example
- * getBarHeight(50, [25, 50, 100]) // 30 (50% of maxHeight)
- */
-export function getBarHeight(
-  value: number,
-  values: number[],
-  maxHeight = 60
-): number {
-  const max = Math.max(...values, 1)
-  return Math.round((value / max) * maxHeight)
-}
