@@ -80,41 +80,24 @@
               <section>
                 <h2 class="section-title mb-3">Activity</h2>
 
-                <div class="mb-4">
+                <div class="mb-5">
                   <h3 class="text-xs text-[rgb(var(--muted))] mb-2">By day</h3>
-                  <div class="flex items-end gap-1 h-12">
-                    <div
-                      v-for="(count, index) in data.commitActivity.byDayOfWeek"
-                      :key="index"
-                      class="flex-1 flex flex-col items-center"
-                    >
-                      <div
-                        class="w-full bg-primary rounded-sm transition-all"
-                        :style="{ height: `${getBarHeight(count, data.commitActivity.byDayOfWeek)}px` }"
-                      />
-                      <span class="text-[10px] text-[rgb(var(--muted))] mt-1">{{ ['S','M','T','W','T','F','S'][index] }}</span>
-                    </div>
-                  </div>
+                  <ActivityChart
+                    :points="data.commitActivity.byDayOfWeek"
+                    :labels="['Sun','Mon','Tue','Wed','Thu','Fri','Sat']"
+                    :tooltip-label="(i) => ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][i]"
+                    :height="64"
+                  />
                 </div>
 
                 <div>
                   <h3 class="text-xs text-[rgb(var(--muted))] mb-2">By hour</h3>
-                  <div class="flex items-end gap-px h-10">
-                    <div
-                      v-for="(count, index) in data.commitActivity.byHour"
-                      :key="index"
-                      class="flex-1 bg-secondary/60 rounded-sm transition-all hover:bg-primary"
-                      :style="{ height: `${getBarHeight(count, data.commitActivity.byHour)}px` }"
-                      :title="`${index}:00 — ${count} commits`"
-                    />
-                  </div>
-                  <div class="flex justify-between text-[10px] text-[rgb(var(--muted))] mt-1">
-                    <span>0h</span>
-                    <span>6h</span>
-                    <span>12h</span>
-                    <span>18h</span>
-                    <span>24h</span>
-                  </div>
+                  <ActivityChart
+                    :points="data.commitActivity.byHour"
+                    :labels="['0h','6h','12h','18h','24h']"
+                    :tooltip-label="(i) => `${String(i).padStart(2, '0')}:00`"
+                    :height="56"
+                  />
                 </div>
               </section>
             </div>
@@ -247,7 +230,6 @@ import {
   formatRelativeDate,
   formatSize,
   formatUrl,
-  getBarHeight,
 } from '@git-wayback/shared'
 
 const route = useRoute()

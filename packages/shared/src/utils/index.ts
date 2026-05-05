@@ -4,5 +4,4 @@ export {
   formatRelativeDate,
   formatSize,
   formatUrl,
-  getBarHeight,
 } from './formatters'
