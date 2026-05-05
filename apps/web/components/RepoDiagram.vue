@@ -1,19 +1,35 @@
 <template>
   <div class="repo-diagram">
+    <!-- Idle (pre-load): big play button, like a video before it starts -->
+    <button
+      v-if="!started"
+      class="evolution-stage evolution-idle"
+      type="button"
+      aria-label="Load and play evolution"
+      @click="start"
+    >
+      <span class="play-button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </span>
+      <span class="text-xs text-[rgb(var(--muted))] mt-3">Click to load evolution</span>
+    </button>
+
     <!-- Loading -->
-    <div v-if="loading" class="py-12 text-center">
+    <div v-else-if="loading" class="evolution-stage">
       <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
       <p class="text-xs text-[rgb(var(--muted))] mt-3">Loading evolution data...</p>
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="py-8">
+    <div v-else-if="error" class="evolution-stage">
       <p class="text-xs text-red-400">{{ error }}</p>
       <button @click="loadEvolution()" class="text-xs link-primary mt-2">Try again</button>
     </div>
 
     <!-- No Tags -->
-    <div v-else-if="snapshots.length === 0" class="py-12 text-center">
+    <div v-else-if="snapshots.length === 0" class="evolution-stage">
       <p class="text-xs text-[rgb(var(--muted))]">No version tags found in this repository.</p>
     </div>
 
@@ -166,7 +182,8 @@ const props = defineProps<{
 const snapshots = ref<TagSnapshot[]>([])
 const repoName = ref('')
 const currentIndex = ref(0)
-const loading = ref(true)
+const started = ref(false)
+const loading = ref(false)
 const error = ref<string | null>(null)
 const diagramContainer = ref<HTMLElement | null>(null)
 const hiddenExtensions = ref<Set<string>>(new Set())
@@ -201,14 +218,24 @@ async function loadEvolution() {
     if (snapshots.value.length > 0) {
       const firstWithFiles = snapshots.value.findIndex((s) => s.files.length > 0)
       currentIndex.value = firstWithFiles >= 0 ? firstWithFiles : 0
+      loading.value = false
       await nextTick()
       await nextTick()
       retryInitGource()
+    } else {
+      loading.value = false
     }
   } catch (err: any) {
     error.value = err.message || 'Failed to load repository evolution'
-  } finally {
     loading.value = false
+  }
+}
+
+async function start() {
+  started.value = true
+  await loadEvolution()
+  if (snapshots.value.length > 0 && !error.value) {
+    togglePlay()
   }
 }
 
@@ -228,23 +255,20 @@ watch(currentIndex, () => {
   updateTree()
 })
 
-onMounted(() => {
-  loadEvolution()
-
-  const resizeObserver = new ResizeObserver(() => {
-    if (snapshots.value.length > 0 && !loading.value) {
-      initGource()
-    }
-  })
-
-  if (diagramContainer.value) {
-    resizeObserver.observe(diagramContainer.value)
+const resizeObserver = new ResizeObserver(() => {
+  if (snapshots.value.length > 0 && !loading.value) {
+    initGource()
   }
+})
 
-  onUnmounted(() => {
-    resizeObserver.disconnect()
-    stopPlay()
-  })
+watch(diagramContainer, (el, prev) => {
+  if (prev) resizeObserver.unobserve(prev)
+  if (el) resizeObserver.observe(el)
+})
+
+onUnmounted(() => {
+  resizeObserver.disconnect()
+  stopPlay()
 })
 </script>
 
@@ -291,5 +315,45 @@ onMounted(() => {
   border: 1px solid rgb(var(--border));
   border-radius: 4px;
   padding: 8px 10px;
+}
+
+.evolution-stage {
+  width: 100%;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
+  border: 1px solid rgb(var(--border));
+  border-radius: 4px;
+}
+
+.evolution-idle {
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.evolution-idle:hover {
+  filter: brightness(1.1);
+}
+
+.evolution-idle .play-button {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgb(var(--primary));
+  color: rgb(var(--primary));
+  background: rgb(var(--bg) / 0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.evolution-idle:hover .play-button {
+  transform: scale(1.06);
+  background: rgb(var(--bg) / 0.8);
 }
 </style>
