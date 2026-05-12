@@ -85,18 +85,10 @@ echo "Version bumped from $CURRENT_VERSION to $NEW_VERSION"
 echo "Tag v$NEW_VERSION created with changelog:"
 echo "$CHANGELOG"
 
-echo "Syncing version to develop branch..."
+echo "Fast-forwarding develop to master (no extra sync commit)..."
 git checkout develop || exit 1
-
-DEVELOP_VERSION=$(node -p "require('./package.json').version")
-if [ "$DEVELOP_VERSION" != "$NEW_VERSION" ]; then
-    bump_package_json "$DEVELOP_VERSION" "$NEW_VERSION" || { git checkout master; exit 1; }
-    git add package.json
-    SKIP_VERSION_BUMP=1 git commit -m "chore: sync version to $NEW_VERSION from master" || { git checkout master; exit 1; }
-    echo "Version synced to develop branch"
-else
-    echo "Develop already at $NEW_VERSION, no sync needed"
-fi
+git merge --ff-only master || { echo "Error: develop is not a fast-forward of master"; git checkout master; exit 1; }
+echo "Develop fast-forwarded to $NEW_VERSION"
 
 echo ""
 echo "   IMPORTANT: Remember to push both branches and tags:"
