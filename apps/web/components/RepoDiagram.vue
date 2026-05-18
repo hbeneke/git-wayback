@@ -1,20 +1,85 @@
 <template>
   <div class="repo-diagram">
-    <!-- Idle (pre-load): big play button, like a video before it starts -->
-    <button
-      v-if="!started"
-      class="evolution-stage evolution-idle"
-      type="button"
-      aria-label="Load and play evolution"
-      @click="start"
-    >
-      <span class="play-button">
+    <!-- Idle (pre-load): config + big play button, like a video before it starts.
+         Client-only: interactive config + props from useFetch would otherwise
+         drift between SSR and client and trigger hydration mismatches. -->
+    <ClientOnly v-if="!started">
+      <div class="evolution-stage evolution-idle">
+      <div class="evolution-config" @click.stop>
+        <div class="config-row">
+          <span class="config-label">Source</span>
+          <div class="seg">
+            <button
+              type="button"
+              :class="['seg-btn', source === 'tags' && 'seg-on']"
+              @click="source = 'tags'"
+            >Tags</button>
+            <button
+              type="button"
+              :class="['seg-btn', source === 'commits' && 'seg-on']"
+              @click="source = 'commits'"
+            >Commits</button>
+          </div>
+        </div>
+
+        <div v-if="source === 'commits' && branches.length" class="config-row">
+          <span class="config-label">Branch</span>
+          <select v-model="branch" class="config-select">
+            <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
+          </select>
+        </div>
+
+        <div class="config-row">
+          <span class="config-label">Versions</span>
+          <div class="seg">
+            <button
+              v-for="opt in limitOptions"
+              :key="opt"
+              type="button"
+              :class="['seg-btn', limit === opt && 'seg-on']"
+              @click="limit = opt"
+            >{{ opt }}</button>
+          </div>
+        </div>
+
+        <div class="config-row">
+          <span class="config-label">Sampling</span>
+          <div class="seg">
+            <button
+              type="button"
+              :class="['seg-btn', sampling === 'spread' && 'seg-on']"
+              title="Evenly spaced across history"
+              @click="sampling = 'spread'"
+            >Spread</button>
+            <button
+              type="button"
+              :class="['seg-btn', sampling === 'latest' && 'seg-on']"
+              title="Most recent only"
+              @click="sampling = 'latest'"
+            >Latest</button>
+          </div>
+        </div>
+      </div>
+
+      <button
+        class="play-button"
+        type="button"
+        aria-label="Load and play evolution"
+        @click="start"
+      >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M8 5v14l11-7z" />
         </svg>
-      </span>
+      </button>
       <span class="text-xs text-[rgb(var(--muted))] mt-3">Click to load evolution</span>
-    </button>
+      </div>
+
+      <template #fallback>
+        <div class="evolution-stage">
+          <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
+        </div>
+      </template>
+    </ClientOnly>
 
     <!-- Loading -->
     <div v-else-if="loading" class="evolution-stage">
@@ -28,9 +93,14 @@
       <button @click="loadEvolution()" class="text-xs link-primary mt-2">Try again</button>
     </div>
 
-    <!-- No Tags -->
+    <!-- No data -->
     <div v-else-if="snapshots.length === 0" class="evolution-stage">
-      <p class="text-xs text-[rgb(var(--muted))]">No version tags found in this repository.</p>
+      <p class="text-xs text-[rgb(var(--muted))]">
+        {{ source === 'tags'
+          ? 'No version tags found in this repository.'
+          : `No commits found on branch "${branch}".` }}
+      </p>
+      <button @click="reconfigure" class="text-xs link-primary mt-2">Change settings</button>
     </div>
 
     <!-- Visualization -->
@@ -45,6 +115,10 @@
             </span>
           </div>
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
+            <span class="config-summary">
+              {{ source }}{{ source === 'commits' ? `@${branch}` : '' }} · {{ snapshots.length }} · {{ sampling }}
+            </span>
+            <button @click="reconfigure" class="text-xs link-primary">Change</button>
             <span v-if="currentSnapshot">{{ currentSnapshot.stats.totalFiles }} files</span>
             <span v-if="currentSnapshot">{{ formatDate(currentSnapshot.date) }}</span>
           </div>
@@ -221,14 +295,38 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@git-wayback/shared'
-import type { TagSnapshot, EvolutionResponse } from '~/composables/useDiagramTree'
+import { formatDate, EVOLUTION } from '@git-wayback/shared'
+import type {
+  TagSnapshot,
+  EvolutionResponse,
+  EvolutionSource,
+  EvolutionSampling,
+} from '~/composables/useDiagramTree'
 import { EXTENSION_COLORS, buildTree } from '~/composables/useDiagramTree'
 
-const props = defineProps<{
-  owner: string
-  repo: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    owner: string
+    repo: string
+    branches?: string[]
+    defaultBranch?: string
+  }>(),
+  { branches: () => [], defaultBranch: '' }
+)
+
+const limitOptions = EVOLUTION.LIMIT_OPTIONS
+
+const source = ref<EvolutionSource>(EVOLUTION.DEFAULT_SOURCE)
+const sampling = ref<EvolutionSampling>(EVOLUTION.DEFAULT_SAMPLING)
+const limit = ref<number>(EVOLUTION.DEFAULT_LIMIT)
+const branch = ref<string>(props.defaultBranch || props.branches[0] || '')
+
+watch(
+  () => props.defaultBranch,
+  (b) => {
+    if (b && !branch.value) branch.value = b
+  }
+)
 
 const snapshots = ref<TagSnapshot[]>([])
 const repoName = ref('')
@@ -316,7 +414,12 @@ async function loadEvolution() {
 
   try {
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
-      query: { limit: 20 },
+      query: {
+        source: source.value,
+        sampling: sampling.value,
+        limit: limit.value,
+        ...(source.value === 'commits' && branch.value ? { branch: branch.value } : {}),
+      },
     })
 
     snapshots.value = response.snapshots
@@ -344,6 +447,15 @@ async function start() {
   if (snapshots.value.length > 0 && !error.value) {
     togglePlay()
   }
+}
+
+// Back to the config screen, keeping current selections
+function reconfigure() {
+  stopPlay()
+  started.value = false
+  error.value = null
+  snapshots.value = []
+  currentIndex.value = 0
 }
 
 function toggleExtension(ext: string) {
@@ -507,13 +619,73 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-.evolution-idle {
-  cursor: pointer;
-  transition: filter 0.15s;
+.evolution-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+  min-width: 280px;
 }
 
-.evolution-idle:hover {
-  filter: brightness(1.1);
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(var(--muted));
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid rgb(var(--border));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: rgb(var(--muted));
+  background: transparent;
+  border-right: 1px solid rgb(var(--border));
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.seg-btn:last-child {
+  border-right: none;
+}
+
+.seg-btn:hover {
+  color: rgb(var(--text));
+}
+
+.seg-on {
+  background: rgb(var(--primary));
+  color: rgb(var(--bg));
+}
+
+.seg-on:hover {
+  color: rgb(var(--bg));
+}
+
+.config-select {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: rgb(var(--text));
+  background: rgb(var(--bg) / 0.6);
+  border: 1px solid rgb(var(--border));
+  border-radius: 4px;
+  max-width: 180px;
+}
+
+.config-summary {
+  font-variant: tabular-nums;
 }
 
 .evolution-idle .play-button {
@@ -527,10 +699,11 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding-left: 4px;
+  cursor: pointer;
   transition: transform 0.15s, background-color 0.15s;
 }
 
-.evolution-idle:hover .play-button {
+.evolution-idle .play-button:hover {
   transform: scale(1.06);
   background: rgb(var(--bg) / 0.8);
 }
