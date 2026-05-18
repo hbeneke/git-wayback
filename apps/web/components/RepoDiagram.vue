@@ -5,73 +5,77 @@
          drift between SSR and client and trigger hydration mismatches. -->
     <ClientOnly v-if="!started">
       <div class="evolution-stage evolution-idle">
-      <div class="evolution-config" @click.stop>
-        <div class="config-row">
-          <span class="config-label">Source</span>
-          <div class="seg">
-            <button
-              type="button"
-              :class="['seg-btn', source === 'tags' && 'seg-on']"
-              @click="source = 'tags'"
-            >Tags</button>
-            <button
-              type="button"
-              :class="['seg-btn', source === 'commits' && 'seg-on']"
-              @click="source = 'commits'"
-            >Commits</button>
+      <div class="evolution-card" @click.stop>
+        <div class="evolution-config">
+          <div class="config-row">
+            <span class="config-label">Source</span>
+            <div class="seg">
+              <button
+                type="button"
+                :class="['seg-btn', source === 'tags' && 'seg-on']"
+                @click="source = 'tags'"
+              >Tags</button>
+              <button
+                type="button"
+                :class="['seg-btn', source === 'commits' && 'seg-on']"
+                @click="source = 'commits'"
+              >Commits</button>
+            </div>
+          </div>
+
+          <div v-if="source === 'commits' && branches.length" class="config-row">
+            <span class="config-label">Branch</span>
+            <select v-model="branch" class="config-select">
+              <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
+            </select>
+          </div>
+
+          <div class="config-row">
+            <span class="config-label">Versions</span>
+            <div class="seg">
+              <button
+                v-for="opt in limitOptions"
+                :key="opt"
+                type="button"
+                :class="['seg-btn', limit === opt && 'seg-on']"
+                @click="limit = opt"
+              >{{ opt }}</button>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <span class="config-label">Sampling</span>
+            <div class="seg">
+              <button
+                type="button"
+                :class="['seg-btn', sampling === 'spread' && 'seg-on']"
+                title="Evenly spaced across history"
+                @click="sampling = 'spread'"
+              >Spread</button>
+              <button
+                type="button"
+                :class="['seg-btn', sampling === 'latest' && 'seg-on']"
+                title="Most recent only"
+                @click="sampling = 'latest'"
+              >Latest</button>
+            </div>
           </div>
         </div>
 
-        <div v-if="source === 'commits' && branches.length" class="config-row">
-          <span class="config-label">Branch</span>
-          <select v-model="branch" class="config-select">
-            <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
-          </select>
-        </div>
-
-        <div class="config-row">
-          <span class="config-label">Versions</span>
-          <div class="seg">
-            <button
-              v-for="opt in limitOptions"
-              :key="opt"
-              type="button"
-              :class="['seg-btn', limit === opt && 'seg-on']"
-              @click="limit = opt"
-            >{{ opt }}</button>
-          </div>
-        </div>
-
-        <div class="config-row">
-          <span class="config-label">Sampling</span>
-          <div class="seg">
-            <button
-              type="button"
-              :class="['seg-btn', sampling === 'spread' && 'seg-on']"
-              title="Evenly spaced across history"
-              @click="sampling = 'spread'"
-            >Spread</button>
-            <button
-              type="button"
-              :class="['seg-btn', sampling === 'latest' && 'seg-on']"
-              title="Most recent only"
-              @click="sampling = 'latest'"
-            >Latest</button>
-          </div>
+        <div class="evolution-card-footer">
+          <button
+            class="play-button"
+            type="button"
+            aria-label="Load and play evolution"
+            @click="start"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <span>Play</span>
+          </button>
         </div>
       </div>
-
-      <button
-        class="play-button"
-        type="button"
-        aria-label="Load and play evolution"
-        @click="start"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-      </button>
-      <span class="text-xs text-[rgb(var(--muted))] mt-3">Click to load evolution</span>
       </div>
 
       <template #fallback>
@@ -619,12 +623,27 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
+.evolution-card {
+  min-width: 320px;
+  background: rgb(var(--bg) / 0.55);
+  border: 1px solid rgb(var(--border));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 .evolution-config {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 24px;
-  min-width: 280px;
+  padding: 18px 18px 16px;
+}
+
+.evolution-card-footer {
+  display: flex;
+  justify-content: center;
+  padding: 12px 18px;
+  border-top: 1px solid rgb(var(--border));
+  background: rgb(var(--bg) / 0.4);
 }
 
 .config-row {
@@ -689,22 +708,22 @@ onUnmounted(() => {
 }
 
 .evolution-idle .play-button {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 2px solid rgb(var(--primary));
-  color: rgb(var(--primary));
-  background: rgb(var(--bg) / 0.55);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding-left: 4px;
+  gap: 7px;
+  padding: 7px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid rgb(var(--primary));
+  color: rgb(var(--primary));
+  background: transparent;
   cursor: pointer;
-  transition: transform 0.15s, background-color 0.15s;
+  transition: background-color 0.12s, color 0.12s;
 }
 
 .evolution-idle .play-button:hover {
-  transform: scale(1.06);
-  background: rgb(var(--bg) / 0.8);
+  background: rgb(var(--primary));
+  color: rgb(var(--bg));
 }
 </style>
