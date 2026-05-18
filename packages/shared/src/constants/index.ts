@@ -56,12 +56,36 @@ export const GITHUB_API = {
 // =============================================================================
 
 export const EVOLUTION = {
-  /** Default number of tags to fetch */
+  /** Default number of snapshots to render */
   DEFAULT_LIMIT: 20,
 
-  /** Maximum number of tags to fetch */
+  /** Maximum number of snapshots (hard cap — bump here to raise the ceiling) */
   MAX_LIMIT: 30,
+
+  /** Counts offered in the UI selector (kept <= MAX_LIMIT) */
+  LIMIT_OPTIONS: [10, 20, 30],
+
+  /**
+   * Max items pulled from GitHub before sampling down to `limit`.
+   * Bounds API cost for repos with thousands of tags/commits.
+   */
+  FETCH_POOL: 100,
+
+  /** Available data sources */
+  SOURCES: ['tags', 'commits'] as const,
+  DEFAULT_SOURCE: 'tags' as const,
+
+  /**
+   * Sampling strategies when the pool is larger than `limit`:
+   * - spread: evenly spaced across history (first + last + intermediate)
+   * - latest: the most recent N
+   */
+  SAMPLING: ['spread', 'latest'] as const,
+  DEFAULT_SAMPLING: 'spread' as const,
 } as const
+
+export type EvolutionSource = (typeof EVOLUTION.SOURCES)[number]
+export type EvolutionSampling = (typeof EVOLUTION.SAMPLING)[number]
 
 export const TIMELINE = {
   /** Default number of tags for timeline view */
