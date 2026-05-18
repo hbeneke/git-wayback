@@ -17,9 +17,16 @@ export interface TagSnapshot {
   }
 }
 
+export type EvolutionSource = 'tags' | 'commits'
+export type EvolutionSampling = 'spread' | 'latest'
+
 export interface EvolutionResponse {
   snapshots: TagSnapshot[]
   repoName: string
+  source: EvolutionSource
+  branch: string | null
+  sampling: EvolutionSampling
+  poolSize: number
   cached: boolean
   capturedAt: string
 }

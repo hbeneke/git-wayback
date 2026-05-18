@@ -80,25 +80,6 @@ function getLimiter(config: RateLimitConfig): Ratelimit | null {
 }
 
 /**
- * Extracts client IP from the request.
- */
-function getClientIp(event: H3Event): string {
-  const headers = getHeaders(event)
-
-  const forwarded = headers['x-forwarded-for']
-  if (forwarded) {
-    return forwarded.split(',')[0].trim()
-  }
-
-  const realIp = headers['x-real-ip']
-  if (realIp) {
-    return realIp
-  }
-
-  return event.node.req.socket.remoteAddress || 'unknown'
-}
-
-/**
  * Applies rate limiting to an event handler.
  * Uses Upstash Redis for distributed rate limiting across serverless instances.
  * If Upstash is not configured, allows all requests (development fallback).
@@ -114,7 +95,7 @@ export async function applyRateLimit(
     return
   }
 
-  const ip = getClientIp(event)
+  const ip = getTrustedClientIp(event)
   const { success, remaining, reset } = await limiter.limit(ip)
 
   setHeaders(event, {

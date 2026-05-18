@@ -44,7 +44,12 @@
             message="Failed to render the repository evolution diagram."
             icon="!"
           >
-            <RepoDiagram :owner="owner" :repo="repo" />
+            <RepoDiagram
+              :owner="owner"
+              :repo="repo"
+              :branches="data?.branches || []"
+              :default-branch="data?.defaultBranch || ''"
+            />
           </ErrorBoundary>
         </template>
 

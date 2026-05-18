@@ -10,12 +10,13 @@ export default defineEventHandler(async (event) => {
   const db = createDb(getDatabaseUrl())
 
   const now = new Date()
-  let dateFilter
+  const dayStr = (d: Date) => d.toISOString().slice(0, 10)
+  let dayFilter: string | undefined
 
   if (period === 'week') {
-    dateFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    dayFilter = dayStr(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
   } else if (period === 'month') {
-    dateFilter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    dayFilter = dayStr(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
   } else if (period !== 'popular') {
     throw createError({ statusCode: 400, message: 'Invalid period. Use: popular, month, week' })
   }
@@ -28,8 +29,8 @@ export default defineEventHandler(async (event) => {
     })
     .from(repoVisits)
 
-  const filtered = dateFilter
-    ? baseQuery.where(sql`${repoVisits.visitedAt} >= ${dateFilter}`)
+  const filtered = dayFilter
+    ? baseQuery.where(sql`${repoVisits.visitDay} >= ${dayFilter}`)
     : baseQuery
 
   const results = await filtered
