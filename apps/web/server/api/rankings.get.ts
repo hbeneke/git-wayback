@@ -11,8 +11,9 @@ export default defineEventHandler(async () => {
   const db = createDb(getDatabaseUrl())
 
   const now = new Date()
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const dayStr = (d: Date) => d.toISOString().slice(0, 10)
+  const oneWeekAgo = dayStr(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
+  const oneMonthAgo = dayStr(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
 
   const [popular, popularMonth, popularWeek] = await Promise.all([
     db
@@ -33,7 +34,7 @@ export default defineEventHandler(async () => {
         visits: sql<number>`COUNT(*)::int`.as('visits'),
       })
       .from(repoVisits)
-      .where(sql`${repoVisits.visitedAt} >= ${oneMonthAgo}`)
+      .where(sql`${repoVisits.visitDay} >= ${oneMonthAgo}`)
       .groupBy(repoVisits.repoFullName)
       .orderBy(sql`COUNT(*) DESC`)
       .limit(10),
@@ -45,7 +46,7 @@ export default defineEventHandler(async () => {
         visits: sql<number>`COUNT(*)::int`.as('visits'),
       })
       .from(repoVisits)
-      .where(sql`${repoVisits.visitedAt} >= ${oneWeekAgo}`)
+      .where(sql`${repoVisits.visitDay} >= ${oneWeekAgo}`)
       .groupBy(repoVisits.repoFullName)
       .orderBy(sql`COUNT(*) DESC`)
       .limit(10),

@@ -14,6 +14,9 @@ export default defineEventHandler(async (event) => {
   // NOT used here because it is client-controlled (see getTrustedClientIp).
   const visitorIp = getTrustedClientIp(event)
 
+  // UTC day bucket — dedup is per visitor+repo+day (see schema unique).
+  const visitDay = new Date().toISOString().slice(0, 10)
+
   const db = createDb(getDatabaseUrl())
 
   await db
@@ -22,6 +25,7 @@ export default defineEventHandler(async (event) => {
       visitorId: visitorIp,
       repoFullName: body.repoFullName,
       repoAvatar: body.repoAvatar || null,
+      visitDay,
     })
     .onConflictDoNothing()
 
