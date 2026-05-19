@@ -20,9 +20,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@git-wayback/core':
-        specifier: workspace:^
-        version: link:../../packages/core
       '@git-wayback/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -54,22 +51,6 @@ importers:
       '@types/d3':
         specifier: ^7.4.3
         version: 7.4.3
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
-  packages/core:
-    dependencies:
-      '@git-wayback/shared':
-        specifier: workspace:*
-        version: link:../shared
-      simple-git:
-        specifier: ^3.27.0
-        version: 3.30.0
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.5
-        version: 22.19.3
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

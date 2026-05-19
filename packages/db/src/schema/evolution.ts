@@ -1,12 +1,10 @@
 import { index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
-import { repositories } from './repositories'
 
 // Stores the evolution snapshots for each repository
 export const evolutionSnapshots = pgTable(
   'evolution_snapshots',
   {
     id: text('id').primaryKey(), // format: owner/repo
-    repositoryId: text('repository_id').references(() => repositories.id),
     owner: text('owner').notNull(),
     name: text('name').notNull(),
     // JSON array of all tag snapshots with their file trees
