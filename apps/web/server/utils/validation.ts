@@ -105,6 +105,41 @@ export function validateSearchQuery(query: unknown): string {
 }
 
 /**
+ * Validates a git ref / branch name following `git check-ref-format` rules.
+ * Rejects path traversal, control chars, and the special tokens git forbids.
+ */
+export function isValidGitRef(ref: string): boolean {
+  if (!ref || typeof ref !== 'string') {
+    return false
+  }
+  if (ref.length > 255) {
+    return false
+  }
+  // No ASCII control chars, space, or any of: ~ ^ : ? * [ \
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: git forbids them
+  if (/[\x00-\x20\x7f ~^:?*[\\]/.test(ref)) {
+    return false
+  }
+  // No "..", no "@{", not a lone "@"
+  if (ref.includes('..') || ref.includes('@{') || ref === '@') {
+    return false
+  }
+  // No leading/trailing slash, no consecutive slashes
+  if (ref.startsWith('/') || ref.endsWith('/') || ref.includes('//')) {
+    return false
+  }
+  // Cannot end with "." or ".lock"
+  if (ref.endsWith('.') || ref.endsWith('.lock')) {
+    return false
+  }
+  // No path component may start with "."
+  if (ref.split('/').some((part) => part.startsWith('.'))) {
+    return false
+  }
+  return true
+}
+
+/**
  * Validates a git commit SHA.
  */
 export function isValidCommitSha(sha: string): boolean {

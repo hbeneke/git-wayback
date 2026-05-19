@@ -283,8 +283,16 @@ export default defineEventHandler(async (event) => {
   const db = createDb(getDatabaseUrl())
   const headers = getGitHubHeaders()
 
-  // Branch only matters for the commits source; default to the repo's default
-  let branch = typeof query.branch === 'string' ? query.branch : ''
+  // Branch only matters for the commits source; default to the repo's default.
+  // Validate BEFORE it reaches the cache key or a GitHub URL — unvalidated
+  // free text here lets callers inflate evolution_snapshots rows arbitrarily.
+  let branch = typeof query.branch === 'string' ? query.branch.trim() : ''
+  if (branch && !isValidGitRef(branch)) {
+    throw createError({
+      statusCode: 400,
+      message: `Invalid branch ref: "${branch}".`,
+    })
+  }
   if (source === 'commits' && !branch) {
     try {
       const repoInfo = await $fetch<{ default_branch: string }>(
