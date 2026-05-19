@@ -2,48 +2,22 @@ import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
 
 export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
-  const headers = getGitHubHeaders()
 
-  // Fetch all data in parallel
-  const [
-    repoData,
-    languages,
-    contributors,
-    commits,
-    branches,
-    releases,
-  ] = await Promise.all([
-    // Basic repo info
-    $fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers }),
-
-    // Languages breakdown
-    $fetch(`https://api.github.com/repos/${owner}/${repo}/languages`, { headers })
-      .catch(() => ({})),
-
-    // Top contributors
-    $fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
-      headers,
-      query: { per_page: GITHUB_API.CONTRIBUTORS_PER_PAGE },
-    }).catch(() => []),
-
-    // Recent commits
-    $fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, {
-      headers,
-      query: { per_page: GITHUB_API.COMMITS_PER_PAGE },
-    }).catch(() => []),
-
-    // Branches
-    $fetch(`https://api.github.com/repos/${owner}/${repo}/branches`, {
-      headers,
-      query: { per_page: GITHUB_API.BRANCHES_PER_PAGE },
-    }).catch(() => []),
-
-    // Releases
-    $fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
-      headers,
-      query: { per_page: GITHUB_API.RELEASES_PER_PAGE },
-    }).catch(() => []),
-  ])
+  // Repo info is required (its failure must surface as 404/429/502).
+  // The rest is best-effort: a failed sub-resource degrades, not 500s.
+  const [repoData, languages, contributors, commits, branches, releases] =
+    await Promise.all([
+      github.getRepo(owner, repo),
+      github.getLanguages(owner, repo).catch(() => ({})),
+      github
+        .getContributors(owner, repo, GITHUB_API.CONTRIBUTORS_PER_PAGE)
+        .catch(() => []),
+      github
+        .listCommits(owner, repo, { perPage: GITHUB_API.COMMITS_PER_PAGE })
+        .catch(() => []),
+      github.getBranches(owner, repo, GITHUB_API.BRANCHES_PER_PAGE).catch(() => []),
+      github.getReleases(owner, repo, GITHUB_API.RELEASES_PER_PAGE).catch(() => []),
+    ])
 
   // Calculate language percentages
   const totalBytes = Object.values(languages as Record<string, number>).reduce((a, b) => a + b, 0)

@@ -10,28 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const searchTerm = query.q.trim().slice(0, DISPLAY.MAX_SEARCH_LENGTH)
 
-  const response = await $fetch<{
-    total_count: number
-    items: Array<{
-      id: number
-      full_name: string
-      description: string | null
-      stargazers_count: number
-      forks_count: number
-      owner: {
-        login: string
-        avatar_url: string
-      }
-    }>
-  }>('https://api.github.com/search/repositories', {
-    headers: getGitHubHeaders(),
-    query: {
-      q: searchTerm,
-      per_page: GITHUB_API.SEARCH_PER_PAGE,
-      sort: 'stars',
-      order: 'desc',
-    },
-  })
+  const response = await github.search(searchTerm, GITHUB_API.SEARCH_PER_PAGE)
 
   return {
     total_count: response.total_count,

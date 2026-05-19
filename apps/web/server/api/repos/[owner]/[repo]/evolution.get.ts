@@ -8,66 +8,6 @@ import {
   type EvolutionSampling,
 } from '@git-wayback/shared'
 
-interface GitHubTag {
-  name: string
-  commit: {
-    sha: string
-  }
-}
-
-interface GitHubRef {
-  ref: string
-  object: {
-    sha: string
-    type: 'commit' | 'tag'
-  }
-}
-
-interface GitHubAnnotatedTag {
-  tag: string
-  message: string
-  object: {
-    sha: string
-    type: string
-  }
-}
-
-interface GitHubCommitDetail {
-  sha: string
-  commit: {
-    message: string
-    author: {
-      name: string
-      date: string
-    }
-  }
-}
-
-interface GitHubCommitListItem {
-  sha: string
-  commit: {
-    message: string
-    author: {
-      name: string
-      date: string
-    }
-  }
-}
-
-interface GitHubTreeItem {
-  path: string
-  mode: string
-  type: 'blob' | 'tree'
-  sha: string
-  size?: number
-}
-
-interface GitHubTreeResponse {
-  sha: string
-  tree: GitHubTreeItem[]
-  truncated: boolean
-}
-
 /**
  * One unit to materialize into a snapshot: a ref label, its commit sha, and an
  * optional pre-resolved message (annotated tag message). The tree + commit
@@ -106,15 +46,8 @@ function sampleSnapshots<T>(items: T[], count: number, strategy: EvolutionSampli
 }
 
 // Resolve the seeds (label + sha) for the tags source
-async function fetchTagSeeds(
-  owner: string,
-  repo: string,
-  headers: Record<string, string>
-): Promise<SnapshotSeed[]> {
-  const tags = await $fetch<GitHubTag[]>(
-    `https://api.github.com/repos/${owner}/${repo}/tags`,
-    { headers, query: { per_page: EVOLUTION.FETCH_POOL } }
-  )
+async function fetchTagSeeds(owner: string, repo: string): Promise<SnapshotSeed[]> {
+  const tags = await github.listTags(owner, repo, EVOLUTION.FETCH_POOL)
 
   // GitHub returns tags newest-first; reverse to approximate oldest-first
   return tags
@@ -126,13 +59,12 @@ async function fetchTagSeeds(
 async function fetchCommitSeeds(
   owner: string,
   repo: string,
-  branch: string,
-  headers: Record<string, string>
+  branch: string
 ): Promise<SnapshotSeed[]> {
-  const commits = await $fetch<GitHubCommitListItem[]>(
-    `https://api.github.com/repos/${owner}/${repo}/commits`,
-    { headers, query: { sha: branch, per_page: EVOLUTION.FETCH_POOL } }
-  )
+  const commits = await github.listCommits(owner, repo, {
+    sha: branch,
+    perPage: EVOLUTION.FETCH_POOL,
+  })
 
   // GitHub returns commits newest-first; reverse to oldest-first.
   // date + message already present here — no per-commit fetch needed.
@@ -157,13 +89,11 @@ async function fetchFromGitHub(
   limit: number,
   sampling: EvolutionSampling
 ): Promise<EvolutionSnapshotData[]> {
-  const headers = getGitHubHeaders()
-
   // 1. Resolve the cheap seed pool (one list call, no trees)
   const pool =
     source === 'commits'
-      ? await fetchCommitSeeds(owner, repo, branch, headers)
-      : await fetchTagSeeds(owner, repo, headers)
+      ? await fetchCommitSeeds(owner, repo, branch)
+      : await fetchTagSeeds(owner, repo)
 
   if (pool.length === 0) {
     return []
@@ -182,28 +112,23 @@ async function fetchFromGitHub(
       batch.map(async (seed) => {
         try {
           const [treeResponse, resolvedDate, annotatedMessage] = await Promise.all([
-            $fetch<GitHubTreeResponse>(
-              `https://api.github.com/repos/${owner}/${repo}/git/trees/${seed.sha}`,
-              { headers, query: { recursive: '1' } }
-            ),
+            github.getTree(owner, repo, seed.sha),
             // Commits already carry their date; tags need a commit lookup
             seed.date
               ? Promise.resolve(seed.date)
-              : $fetch<GitHubCommitDetail>(
-                  `https://api.github.com/repos/${owner}/${repo}/commits/${seed.sha}`,
-                  { headers }
-                ).then((c) => c.commit.author.date),
+              : github
+                  .getCommit(owner, repo, seed.sha)
+                  .then((c) => c.commit.author.date),
             // Only tags can be annotated; skip the extra call for commits
             source === 'tags'
-              ? $fetch<GitHubRef>(
-                  `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${seed.label}`,
-                  { headers }
-                )
+              ? github
+                  .getTagRef(owner, repo, seed.label)
                   .then(async (ref) => {
                     if (ref.object.type === 'tag') {
-                      const annotated = await $fetch<GitHubAnnotatedTag>(
-                        `https://api.github.com/repos/${owner}/${repo}/git/tags/${ref.object.sha}`,
-                        { headers }
+                      const annotated = await github.getAnnotatedTag(
+                        owner,
+                        repo,
+                        ref.object.sha
                       )
                       return annotated.message?.trim() || null
                     }
@@ -281,7 +206,6 @@ export default defineEventHandler(async (event) => {
   )
 
   const db = createDb(getDatabaseUrl())
-  const headers = getGitHubHeaders()
 
   // Branch only matters for the commits source; default to the repo's default.
   // Validate BEFORE it reaches the cache key or a GitHub URL — unvalidated
@@ -295,10 +219,7 @@ export default defineEventHandler(async (event) => {
   }
   if (source === 'commits' && !branch) {
     try {
-      const repoInfo = await $fetch<{ default_branch: string }>(
-        `https://api.github.com/repos/${owner}/${repo}`,
-        { headers }
-      )
+      const repoInfo = await github.getRepo(owner, repo)
       branch = repoInfo.default_branch
     } catch {
       branch = 'main'
