@@ -446,8 +446,9 @@ async function loadEvolution() {
     } else {
       loading.value = false
     }
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load repository evolution'
+  } catch (err: unknown) {
+    error.value =
+      err instanceof Error ? err.message : 'Failed to load repository evolution'
     loading.value = false
   }
 }
@@ -485,10 +486,16 @@ watch(currentIndex, () => {
   updateTree()
 })
 
+// Debounce resize redraws and avoid the full rebuild path — updateTree reuses
+// the existing svg/groups and just re-runs the radial layout for the new size.
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
 const resizeObserver = new ResizeObserver(() => {
-  if (snapshots.value.length > 0 && !loading.value) {
-    initGource()
-  }
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    if (snapshots.value.length > 0 && !loading.value) {
+      updateTree()
+    }
+  }, 150)
 })
 
 watch(diagramContainer, (el, prev) => {
@@ -498,6 +505,7 @@ watch(diagramContainer, (el, prev) => {
 
 onUnmounted(() => {
   resizeObserver.disconnect()
+  if (resizeTimer) clearTimeout(resizeTimer)
   stopPlay()
 })
 </script>

@@ -1,9 +1,9 @@
 {
   "name": "git-wayback",
-  "version": "0.6.20",
+  "version": "0.6.21",
   "private": true,
   "description": "Visualize the evolution of any GitHub repository",
-  "author": "Your Name",
+  "author": "Habakuk Beneke <habakukbeneke@proton.me>",
   "license": "MIT",
   "scripts": {
     "dev": "turbo dev",

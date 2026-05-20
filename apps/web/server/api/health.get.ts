@@ -6,7 +6,6 @@ export default defineEventHandler(() => {
     timestamp: new Date().toISOString(),
     checks: {
       config: configValid,
-      githubToken: !!getGitHubToken(),
     },
   }
 })

@@ -4,8 +4,9 @@ import { createDb, repoVisits } from '@git-wayback/db'
 export default defineEventHandler(async (event) => {
   const period = getRouterParam(event, 'period')
   const query = getQuery(event)
-  const limit = Math.min(Number(query.limit) || 50, 100)
-  const offset = Number(query.offset) || 0
+  // Clamp both bounds — a negative offset would make Postgres throw.
+  const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 100)
+  const offset = Math.max(Number(query.offset) || 0, 0)
 
   const db = createDb(getDatabaseUrl())
 
