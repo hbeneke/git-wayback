@@ -1,6 +1,6 @@
 {
   "name": "git-wayback",
-  "version": "0.6.19",
+  "version": "0.6.20",
   "private": true,
   "description": "Visualize the evolution of any GitHub repository",
   "author": "Your Name",
@@ -13,6 +13,7 @@
     "format": "biome format --write .",
     "clean": "turbo clean && rm -rf node_modules",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "sync": "node scripts/sync-master.mjs",
     "sync:minor": "node scripts/sync-master.mjs --minor",
     "sync:patch": "node scripts/sync-master.mjs --patch",
