@@ -165,6 +165,10 @@ async function fetchFromGitHub(
               totalFiles: files.length,
               totalSize: files.reduce((sum, f) => sum + f.size, 0),
             },
+            // Propagate GitHub's truncation flag so the UI can warn instead of
+            // silently serving an incomplete file list. We still cache these
+            // (otherwise huge repos would never cache); the UI shows the badge.
+            truncated: treeResponse.truncated,
           }
         } catch (err) {
           logger.evolution.warn(`Failed to fetch data for ${source} ${seed.label}`, err)

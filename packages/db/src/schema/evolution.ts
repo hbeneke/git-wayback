@@ -37,6 +37,12 @@ export interface EvolutionSnapshotData {
     totalFiles: number
     totalSize: number
   }
+  /**
+   * GitHub recursive tree was truncated for this snapshot — file list is
+   * incomplete. Optional for backward compatibility with rows captured before
+   * the flag was tracked.
+   */
+  truncated?: boolean
 }
 
 export type EvolutionSnapshot = typeof evolutionSnapshots.$inferSelect

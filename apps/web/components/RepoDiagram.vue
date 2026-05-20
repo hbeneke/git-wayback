@@ -117,6 +117,13 @@
             <span v-if="currentSnapshot" class="text-primary text-xs font-semibold">
               {{ currentSnapshot.tag }}
             </span>
+            <span
+              v-if="currentSnapshot?.truncated"
+              class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-400"
+              title="GitHub truncated the recursive tree — this snapshot's file list is incomplete."
+            >
+              partial
+            </span>
           </div>
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
             <span class="config-summary">

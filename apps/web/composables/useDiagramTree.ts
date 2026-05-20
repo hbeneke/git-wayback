@@ -15,6 +15,8 @@ export interface TagSnapshot {
     totalFiles: number
     totalSize: number
   }
+  /** GitHub tree was truncated — file list is incomplete for this snapshot. */
+  truncated?: boolean
 }
 
 export type EvolutionSource = 'tags' | 'commits'
