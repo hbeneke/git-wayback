@@ -1,7 +1,0 @@
-export * from './analysis-status'
-export * from './branch'
-export * from './commit'
-export * from './contributor'
-export * from './deep-analysis'
-export * from './github'
-export * from './repository'

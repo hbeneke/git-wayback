@@ -15,11 +15,9 @@ export function createLogger(scope: string): ConsolaInstance {
 }
 
 /**
- * Pre-configured loggers for common modules.
+ * Pre-configured loggers for common modules. Only the scopes actually
+ * consumed are wired; add more here when a new scope shows up.
  */
 export const logger = {
   evolution: createLogger('evolution'),
-  api: createLogger('api'),
-  db: createLogger('db'),
-  github: createLogger('github'),
 }

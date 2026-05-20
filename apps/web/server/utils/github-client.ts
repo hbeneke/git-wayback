@@ -1,16 +1,30 @@
 /**
  * Single access point for the GitHub REST API.
  *
- * - One place builds URLs + auth headers (getGitHubHeaders).
+ * - Builds URLs + auth headers in one place.
  * - Errors are mapped once: 404 -> 404 (not found), 403/429 -> 429 (GitHub
  *   rate limit, distinct message), anything else -> 502 (upstream failure).
- *   This is why a missing repo and a rate-limited request no longer collapse
- *   into the same "Repository not found" message in the UI.
+ *   A missing repo and a rate-limited request no longer collapse into the
+ *   same "Repository not found" message in the UI.
  * - All GitHub response shapes live here (no more duplicated interfaces
  *   across endpoints).
  */
 
 const API_BASE = 'https://api.github.com'
+const GITHUB_API_ACCEPT = 'application/vnd.github.v3+json'
+const USER_AGENT = 'git-wayback'
+
+function buildHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: GITHUB_API_ACCEPT,
+    'User-Agent': USER_AGENT,
+  }
+  const token = getGitHubToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
+}
 
 // --- Response shapes -------------------------------------------------------
 
@@ -148,7 +162,7 @@ export async function ghFetch<T>(
 ): Promise<T> {
   try {
     return await $fetch<T>(`${API_BASE}${path}`, {
-      headers: getGitHubHeaders(),
+      headers: buildHeaders(),
       query,
     })
   } catch (err) {

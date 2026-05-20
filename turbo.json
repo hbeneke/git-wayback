@@ -2,8 +2,6 @@
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
     "DATABASE_URL",
-    "POSTGRES_URL",
-    "REPOS_DIR",
     "NODE_ENV",
     "VERCEL",
     "VERCEL_ENV",
@@ -11,7 +9,8 @@
     "VERCEL_GIT_COMMIT_SHA",
     "VERCEL_GIT_COMMIT_REF",
     "UPSTASH_REDIS_REST_URL",
-    "UPSTASH_REDIS_REST_TOKEN"
+    "UPSTASH_REDIS_REST_TOKEN",
+    "GITHUB_TOKEN"
   ],
   "tasks": {
     "build": {

@@ -87,14 +87,6 @@ export const EVOLUTION = {
 export type EvolutionSource = (typeof EVOLUTION.SOURCES)[number]
 export type EvolutionSampling = (typeof EVOLUTION.SAMPLING)[number]
 
-export const TIMELINE = {
-  /** Default number of tags for timeline view */
-  DEFAULT_LIMIT: 50,
-
-  /** Maximum number of tags for timeline view */
-  MAX_LIMIT: 100,
-} as const
-
 // =============================================================================
 // UI Display Limits
 // =============================================================================
