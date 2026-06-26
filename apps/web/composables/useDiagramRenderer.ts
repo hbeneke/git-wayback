@@ -16,6 +16,9 @@ import {
 
 const HOVER_TRANSITION_MS = 300
 const HOVER_SCALE = 2.2
+// Links inherit the connected (target) node's color; this keeps them subtle
+// at rest while hover bumps the opacity to full.
+const LINK_BASE_OPACITY = 0.35
 
 export function useDiagramRenderer(
   diagramContainer: Ref<HTMLElement | null>,
@@ -25,7 +28,13 @@ export function useDiagramRenderer(
   tooltip: Ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>,
   hoveredGraphPath: Ref<string | null>,
   onNodeClick: (path: string) => void,
+  expanded?: Ref<boolean>,
 ) {
+  // Normal mode keeps the fixed design height; expanded mode fills the
+  // container vertically (overlay below the app header).
+  const resolveHeight = (el: HTMLElement | null) =>
+    expanded?.value && el?.clientHeight ? el.clientHeight : DIAGRAM.HEIGHT
+
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
   let svgRoot: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
   function getNodeRadius(d: d3.HierarchyNode<TreeNode>): number {
@@ -68,7 +77,8 @@ export function useDiagramRenderer(
       .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
       .transition().duration(HOVER_TRANSITION_MS)
       .attr('stroke', getNodeColor(data))
-      .attr('stroke-width', 1.25)
+      .attr('stroke-opacity', 1)
+      .attr('stroke-width', 1.5)
   }
 
   function unhighlightParentLink(
@@ -78,7 +88,8 @@ export function useDiagramRenderer(
     linksGroup.selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
       .filter((d) => (d.target.data.path || d.target.data.name) === (data.path || data.name))
       .transition().duration(HOVER_TRANSITION_MS)
-      .attr('stroke', 'rgba(16, 185, 129, 0.15)')
+      .attr('stroke', getNodeColor(data))
+      .attr('stroke-opacity', LINK_BASE_OPACITY)
       .attr('stroke-width', 1)
   }
 
@@ -159,7 +170,8 @@ export function useDiagramRenderer(
     const linkEnter = linkSelection.enter()
       .append('path')
       .attr('fill', 'none')
-      .attr('stroke', 'rgba(16, 185, 129, 0.15)')
+      .attr('stroke', (d) => getNodeColor(d.target.data))
+      .attr('stroke-opacity', LINK_BASE_OPACITY)
       .attr('stroke-width', 1)
       .attr('opacity', 0)
 
@@ -169,6 +181,7 @@ export function useDiagramRenderer(
       .transition()
       .duration(D3_TRANSITION_DURATION_MS)
       .attr('opacity', 1)
+      .attr('stroke', (d) => getNodeColor(d.target.data))
       .attr('d', (d) => {
         const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
         const [tx, ty] = radialPoint(d.target.x!, d.target.y!)
@@ -179,11 +192,11 @@ export function useDiagramRenderer(
       .style('cursor', 'pointer')
       .style('pointer-events', 'visibleStroke')
       .on('mouseover', function (event, d) {
-        const color = getNodeColor(d.target.data)
         d3.select(this)
           .transition().duration(HOVER_TRANSITION_MS)
-          .attr('stroke', color)
-          .attr('stroke-width', 1.25)
+          .attr('stroke', getNodeColor(d.target.data))
+          .attr('stroke-opacity', 1)
+          .attr('stroke-width', 1.5)
         highlightNodeCircle(nodesGroup, d.target.data)
         showTooltip(event, d.target.data)
         hoveredGraphPath.value = d.target.data.path || d.target.data.name
@@ -194,7 +207,8 @@ export function useDiagramRenderer(
       .on('mouseout', function (_event, d) {
         d3.select(this)
           .transition().duration(HOVER_TRANSITION_MS)
-          .attr('stroke', 'rgba(16, 185, 129, 0.15)')
+          .attr('stroke', getNodeColor(d.target.data))
+          .attr('stroke-opacity', LINK_BASE_OPACITY)
           .attr('stroke-width', 1)
         unhighlightNodeCircle(nodesGroup, d.target.data)
         tooltip.value.visible = false
@@ -274,7 +288,7 @@ export function useDiagramRenderer(
 
     const container = diagramContainer.value
     const width = container.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = DIAGRAM.HEIGHT
+    const height = resolveHeight(container)
     const centerX = width / 2
     const centerY = height / 2
 
@@ -327,7 +341,13 @@ export function useDiagramRenderer(
     const nodesGroup = g.select<SVGGElement>('.nodes')
 
     const width = diagramContainer.value.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = DIAGRAM.HEIGHT
+    const height = resolveHeight(diagramContainer.value)
+
+    // Keep the svg viewport in sync with the container (resize / expand toggle).
+    svg
+      .attr('width', width)
+      .attr('height', height)
+      .attr('viewBox', [0, 0, width, height].join(' '))
 
     renderTree(linksGroup, nodesGroup, width, height, width / 2, height / 2)
   }
@@ -391,7 +411,7 @@ export function useDiagramRenderer(
     if (!target) return
 
     const width = diagramContainer.value.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = DIAGRAM.HEIGHT
+    const height = resolveHeight(diagramContainer.value)
     const scale = 2.5
     const tx = width / 2 - target.x * scale
     const ty = height / 2 - target.y * scale

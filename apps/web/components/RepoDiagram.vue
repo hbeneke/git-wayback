@@ -109,7 +109,11 @@
 
     <!-- Visualization -->
     <template v-else>
-      <div class="border border-[rgb(var(--border))] rounded overflow-hidden">
+      <div
+        class="border border-[rgb(var(--border))] rounded overflow-hidden"
+        :class="{ 'evolution-expanded': expanded }"
+        :style="expanded ? { top: headerOffset + 'px' } : undefined"
+      >
         <!-- Header -->
         <div class="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between relative z-10">
           <div class="flex items-center gap-3">
@@ -132,6 +136,20 @@
             <button @click="reconfigure" class="text-xs link-primary">Change</button>
             <span v-if="currentSnapshot">{{ currentSnapshot.stats.totalFiles }} files</span>
             <span v-if="currentSnapshot">{{ formatDate(currentSnapshot.date) }}</span>
+            <button
+              type="button"
+              class="overlay-toggle"
+              :aria-label="expanded ? 'Collapse view' : 'Expand view'"
+              :title="expanded ? 'Collapse (Esc)' : 'Expand'"
+              @click="toggleExpand"
+            >
+              <svg v-if="!expanded" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 1h4v4 M11 1 7 5 M5 11H1V7 M1 11l4-4" />
+              </svg>
+              <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 1 7 5m0 0V1m0 4h4 M1 11l4-4m0 0v4m0-4H1" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -349,6 +367,8 @@ const diagramContainer = ref<HTMLElement | null>(null)
 const hiddenExtensions = ref<Set<string>>(new Set())
 const hoveredIndex = ref<number | null>(null)
 const messageExpanded = ref(false)
+const expanded = ref(false)
+const headerOffset = ref(56)
 const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
   visible: false, x: 0, y: 0, name: '', dir: '', kind: '',
 })
@@ -372,7 +392,7 @@ const fileTreeRoot = computed(() => {
 const { isPlaying, togglePlay, stopPlay } = useDiagramPlayback(currentIndex, totalSnapshots)
 const { initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath } = useDiagramRenderer(
   diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip, hoveredGraphPath,
-  onGraphNodeClick,
+  onGraphNodeClick, expanded,
 )
 
 async function onGraphNodeClick(path: string) {
@@ -470,6 +490,33 @@ function reconfigure() {
   currentIndex.value = 0
 }
 
+// Measure the sticky AppHeader so the expanded overlay starts just below it.
+function measureHeader() {
+  const h = document.querySelector('header.sticky')?.getBoundingClientRect().height
+  if (h) headerOffset.value = Math.round(h)
+}
+
+function toggleExpand() {
+  expanded.value = !expanded.value
+  if (expanded.value) measureHeader()
+  // Resize the radial layout to the new container size (ResizeObserver also
+  // fires, but call directly so it snaps without the debounce delay).
+  nextTick(() => updateTree())
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && expanded.value) {
+    expanded.value = false
+    nextTick(() => updateTree())
+  }
+}
+
+watch(expanded, (v) => {
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = v ? 'hidden' : ''
+  }
+})
+
 function toggleExtension(ext: string) {
   const newSet = new Set(hiddenExtensions.value)
   if (newSet.has(ext)) {
@@ -503,9 +550,15 @@ watch(diagramContainer, (el, prev) => {
   if (el) resizeObserver.observe(el)
 })
 
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+})
+
 onUnmounted(() => {
   resizeObserver.disconnect()
   if (resizeTimer) clearTimeout(resizeTimer)
+  window.removeEventListener('keydown', onKeydown)
+  if (typeof document !== 'undefined') document.body.style.overflow = ''
   stopPlay()
 })
 </script>
@@ -521,6 +574,31 @@ onUnmounted(() => {
   height: 500px;
   background: rgb(var(--bg));
   background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
+}
+
+/* Expanded overlay: fills the viewport below the sticky AppHeader.
+   `top` is set inline from the measured header height. */
+.evolution-expanded {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--bg));
+}
+
+.evolution-expanded .canvas-wrapper {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.evolution-expanded .gource-container {
+  height: 100%;
 }
 
 .file-tooltip {
