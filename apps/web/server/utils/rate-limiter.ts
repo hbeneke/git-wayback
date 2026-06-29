@@ -2,21 +2,12 @@ import type { H3Event } from 'h3'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-/**
- * Rate limiter configuration.
- */
 export interface RateLimitConfig {
-  /** Maximum requests allowed in the window */
   maxRequests: number
-  /** Time window in seconds */
   windowSec: number
-  /** Prefix for the rate limit key */
   prefix: string
 }
 
-/**
- * Default rate limit configurations for different endpoint types.
- */
 export const RATE_LIMITS = {
   /** Standard API endpoints */
   api: {
@@ -50,10 +41,7 @@ export const RATE_LIMITS = {
   },
 } as const
 
-/**
- * Creates an Upstash Redis-backed rate limiter.
- * Falls back to allowing all requests if Upstash is not configured.
- */
+// null when Upstash isn't configured → callers skip rate limiting
 function createUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
   const url = getEnvConfig().upstashRedisRestUrl
   const token = getEnvConfig().upstashRedisRestToken
@@ -69,7 +57,6 @@ function createUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
   })
 }
 
-/** Cache limiter instances to avoid re-creating them on every request */
 const limiterCache = new Map<string, Ratelimit | null>()
 
 function getLimiter(config: RateLimitConfig): Ratelimit | null {
@@ -79,11 +66,6 @@ function getLimiter(config: RateLimitConfig): Ratelimit | null {
   return limiterCache.get(config.prefix)!
 }
 
-/**
- * Applies rate limiting to an event handler.
- * Uses Upstash Redis for distributed rate limiting across serverless instances.
- * If Upstash is not configured, allows all requests (development fallback).
- */
 export async function applyRateLimit(
   event: H3Event,
   config: RateLimitConfig = RATE_LIMITS.api

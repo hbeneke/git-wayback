@@ -1,12 +1,4 @@
-/**
- * Application-wide constants and configuration values.
- * Centralizes magic numbers for maintainability and documentation.
- */
-
-// =============================================================================
-// Time Constants
-// =============================================================================
-
+// Time constants
 export const MS_PER_SECOND = 1000
 export const MS_PER_MINUTE = MS_PER_SECOND * 60
 export const MS_PER_HOUR = MS_PER_MINUTE * 60
@@ -27,10 +19,7 @@ export const D3_TRANSITION_DURATION_MS = 500
 /** D3 transition duration for exit animations (ms) */
 export const D3_EXIT_TRANSITION_DURATION_MS = 300
 
-// =============================================================================
-// GitHub API Limits
-// =============================================================================
-
+// GitHub API limits
 export const GITHUB_API = {
   /** Max items per search result page */
   SEARCH_PER_PAGE: 10,
@@ -51,10 +40,7 @@ export const GITHUB_API = {
   BATCH_SIZE: 5,
 } as const
 
-// =============================================================================
-// Evolution / Timeline Limits
-// =============================================================================
-
+// Evolution / timeline limits
 export const EVOLUTION = {
   /** Default number of snapshots to render */
   DEFAULT_LIMIT: 20,
@@ -87,10 +73,7 @@ export const EVOLUTION = {
 export type EvolutionSource = (typeof EVOLUTION.SOURCES)[number]
 export type EvolutionSampling = (typeof EVOLUTION.SAMPLING)[number]
 
-// =============================================================================
-// UI Display Limits
-// =============================================================================
-
+// UI display limits
 export const DISPLAY = {
   /** Max recent commits to show */
   RECENT_COMMITS: 15,
@@ -99,10 +82,7 @@ export const DISPLAY = {
   MAX_SEARCH_LENGTH: 256,
 } as const
 
-// =============================================================================
-// Diagram Configuration
-// =============================================================================
-
+// Diagram configuration
 export const DIAGRAM = {
   /** Fixed height for the visualization container */
   HEIGHT: 600,

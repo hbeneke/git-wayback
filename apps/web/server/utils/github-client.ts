@@ -26,7 +26,7 @@ function buildHeaders(): Record<string, string> {
   return headers
 }
 
-// --- Response shapes -------------------------------------------------------
+// Response shapes
 
 export interface GhRepo {
   id: number
@@ -132,7 +132,7 @@ export interface GhSearchResponse {
   }>
 }
 
-// --- Core fetch + error mapping -------------------------------------------
+// Core fetch + error mapping
 
 function mapGitHubError(err: unknown): never {
   const status =
@@ -170,7 +170,7 @@ export async function ghFetch<T>(
   }
 }
 
-// --- Typed endpoint helpers -----------------------------------------------
+// Typed endpoint helpers
 
 export const github = {
   getRepo: (owner: string, repo: string) =>

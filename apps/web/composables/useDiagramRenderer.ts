@@ -156,7 +156,7 @@ export function useDiagramRenderer(
       return !isExtensionHidden(d.target.data.extension || null)
     })
 
-    // --- Links ---
+    // Links
     const linkSelection = linksGroup
       .selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
       .data(visibleLinks, (d) => `${d.source.data.path}-${d.target.data.path}`)
@@ -215,7 +215,7 @@ export function useDiagramRenderer(
         hoveredGraphPath.value = null
       })
 
-    // --- Nodes ---
+    // Nodes
     const nodeSelection = nodesGroup
       .selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
       .data(visibleNodes, (d) => d.data.path || d.data.name)

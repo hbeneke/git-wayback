@@ -1,22 +1,10 @@
 import type { H3Event } from 'h3'
 import { DISPLAY } from '@git-wayback/shared'
 
-/**
- * GitHub username/organization name constraints:
- * - 1-39 characters
- * - Alphanumeric or hyphens
- * - Cannot start with a hyphen
- * - Cannot have consecutive hyphens
- */
+// 1-39 chars, alphanumeric or hyphens, no leading/trailing/consecutive hyphen
 const GITHUB_OWNER_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
 
-/**
- * GitHub repository name constraints:
- * - 1-100 characters
- * - Alphanumeric, hyphens, underscores, and dots
- * - Cannot start with a dot
- * - Cannot be exactly "." or ".."
- */
+// 1-100 chars, alphanumeric/hyphen/underscore/dot, no leading dot
 const GITHUB_REPO_PATTERN = /^(?!\.)[a-zA-Z0-9._-]{1,100}$/
 
 interface RepoParams {
@@ -24,33 +12,14 @@ interface RepoParams {
   repo: string
 }
 
-/**
- * Validates a GitHub owner (username or organization) name.
- */
 export function isValidGitHubOwner(owner: string): boolean {
-  if (!owner || typeof owner !== 'string') {
-    return false
-  }
   return GITHUB_OWNER_PATTERN.test(owner)
 }
 
-/**
- * Validates a GitHub repository name.
- */
 export function isValidGitHubRepo(repo: string): boolean {
-  if (!repo || typeof repo !== 'string') {
-    return false
-  }
-  if (repo === '.' || repo === '..') {
-    return false
-  }
   return GITHUB_REPO_PATTERN.test(repo)
 }
 
-/**
- * Validates and extracts owner/repo from route parameters.
- * Throws an H3 error if validation fails.
- */
 export function validateRepoParams(event: H3Event): RepoParams {
   const params = getRouterParams(event)
   const owner = params.owner as string
@@ -73,10 +42,6 @@ export function validateRepoParams(event: H3Event): RepoParams {
   return { owner, repo }
 }
 
-/**
- * Validates a search query string.
- * Returns sanitized query or throws an error.
- */
 export function validateSearchQuery(query: unknown): string {
   if (!query || typeof query !== 'string') {
     throw createError({
@@ -104,12 +69,9 @@ export function validateSearchQuery(query: unknown): string {
   return trimmed
 }
 
-/**
- * Validates a git ref / branch name following `git check-ref-format` rules.
- * Rejects path traversal, control chars, and the special tokens git forbids.
- */
+// git check-ref-format rules: no traversal, control chars, or forbidden tokens
 export function isValidGitRef(ref: string): boolean {
-  if (!ref || typeof ref !== 'string') {
+  if (!ref) {
     return false
   }
   if (ref.length > 255) {
@@ -139,20 +101,10 @@ export function isValidGitRef(ref: string): boolean {
   return true
 }
 
-/**
- * Validates a git commit SHA.
- */
 export function isValidCommitSha(sha: string): boolean {
-  if (!sha || typeof sha !== 'string') {
-    return false
-  }
-  // Git SHA can be 7-40 characters (short or full)
   return /^[a-f0-9]{7,40}$/i.test(sha)
 }
 
-/**
- * Validates and returns a commit SHA from query parameters.
- */
 export function validateCommitSha(event: H3Event): string {
   const query = getQuery(event)
   const sha = query.sha as string

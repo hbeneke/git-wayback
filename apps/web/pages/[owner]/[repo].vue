@@ -42,7 +42,6 @@
           <ErrorBoundary
             title="Visualization Error"
             message="Failed to render the repository evolution diagram."
-            icon="!"
           >
             <RepoDiagram
               :owner="owner"

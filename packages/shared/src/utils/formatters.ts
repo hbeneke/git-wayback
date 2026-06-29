@@ -1,8 +1,3 @@
-/**
- * Formatting utilities for consistent data presentation across the application.
- * These pure functions handle number, date, and string transformations.
- */
-
 const MILLISECONDS_PER_SECOND = 1000
 const MILLISECONDS_PER_MINUTE = MILLISECONDS_PER_SECOND * 60
 const MILLISECONDS_PER_HOUR = MILLISECONDS_PER_MINUTE * 60

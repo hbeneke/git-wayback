@@ -21,14 +21,12 @@
 interface Props {
   title?: string
   message?: string
-  icon?: string
   showRetry?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: 'Something went wrong',
   message: 'An unexpected error occurred. Please try again.',
-  icon: '⚠️',
   showRetry: true,
 })
 
