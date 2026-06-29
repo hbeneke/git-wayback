@@ -110,8 +110,10 @@
     <!-- Visualization -->
     <template v-else>
       <div
-        class="border border-[rgb(var(--border))] rounded overflow-hidden"
-        :class="{ 'evolution-expanded': expanded }"
+        class="border border-[rgb(var(--border))] overflow-hidden"
+        :class="expanded
+          ? 'fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-none bg-[rgb(var(--bg))]'
+          : 'rounded'"
         :style="expanded ? { top: headerOffset + 'px' } : undefined"
       >
         <!-- Header -->
@@ -178,8 +180,8 @@
         </div>
 
         <!-- Canvas -->
-        <div class="canvas-wrapper">
-          <div ref="diagramContainer" class="gource-container"></div>
+        <div class="canvas-wrapper relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
+          <div ref="diagramContainer" class="gource-container" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
 
           <!-- File tooltip -->
           <div
@@ -564,41 +566,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.canvas-wrapper {
-  position: relative;
-  height: 500px;
-}
-
+/* Height + flex behaviour live in the template via Tailwind (fixed in normal
+   mode, flex-fill when expanded). Only the gradient backdrop stays here. */
 .gource-container {
-  width: 100%;
-  height: 500px;
   background: rgb(var(--bg));
   background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
-}
-
-/* Expanded overlay: fills the viewport below the sticky AppHeader.
-   `top` is set inline from the measured header height. */
-.evolution-expanded {
-  position: fixed;
-  top: 56px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  border-radius: 0;
-  display: flex;
-  flex-direction: column;
-  background: rgb(var(--bg));
-}
-
-.evolution-expanded .canvas-wrapper {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-}
-
-.evolution-expanded .gource-container {
-  height: 100%;
 }
 
 .file-tooltip {
