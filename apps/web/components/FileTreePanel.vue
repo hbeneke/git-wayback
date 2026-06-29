@@ -1,33 +1,44 @@
 <template>
-  <ul class="file-tree" :class="{ 'is-root': depth === 0 }">
+  <ul class="list-none p-0 m-0 text-[11px] font-mono">
     <li
       v-for="node in sortedNodes"
       :key="node.path || node.name"
-      class="file-tree-item"
     >
       <button
         type="button"
-        class="file-tree-row"
-        :class="{ 'is-highlighted': isHighlighted(node) }"
+        class="w-full flex items-center gap-1.5 py-0.5 pr-2 text-left bg-transparent border-0 cursor-pointer rounded-sm transition-all duration-[250ms]"
+        :class="isHighlighted(node)
+          ? 'bg-[rgb(var(--primary)/0.18)] shadow-[inset_2px_0_0_rgb(var(--primary))]'
+          : 'hover:bg-[rgb(var(--border)/0.4)]'"
         :style="{ paddingLeft: `${depth * 10 + 6}px` }"
         :data-path="node.path || node.name"
         @mouseenter="$emit('hover', node.path || node.name)"
         @mouseleave="$emit('hover', null)"
         @click.stop="onClick(node)"
       >
-        <span v-if="node.type === 'folder'" class="caret" :class="{ open: isOpen(node) }">
+        <span
+          v-if="node.type === 'folder'"
+          class="w-[10px] h-[10px] inline-flex items-center justify-center text-[rgb(var(--muted))] transition-transform duration-[120ms] shrink-0"
+          :class="isOpen(node) ? 'rotate-90' : ''"
+        >
           <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
             <path d="M2 1l4 3-4 3z" />
           </svg>
         </span>
-        <span v-else class="caret-spacer" />
+        <span v-else class="w-[10px] shrink-0" />
 
         <span
-          class="dot"
+          class="w-[7px] h-[7px] rounded-full shrink-0"
           :style="{ backgroundColor: node.type === 'folder' ? 'rgb(16, 185, 129)' : getExtensionColor(node.extension || null) }"
         />
 
-        <span class="label" :class="{ folder: node.type === 'folder' }">{{ node.name }}</span>
+        <span
+          class="truncate transition-colors duration-[250ms]"
+          :class="[
+            node.type === 'folder' ? 'font-semibold' : '',
+            isHighlighted(node) ? 'text-[rgb(var(--primary))]' : 'text-[rgb(var(--foreground))]',
+          ]"
+        >{{ node.name }}</span>
       </button>
 
       <FileTreePanel
@@ -87,81 +98,3 @@ function onClick(node: TreeNode) {
   }
 }
 </script>
-
-<style scoped>
-.file-tree {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.file-tree-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px 2px 6px;
-  text-align: left;
-  color: rgb(var(--foreground));
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  border-radius: 2px;
-  transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
-}
-
-.file-tree-row:hover {
-  background: rgb(var(--border) / 0.4);
-}
-
-.file-tree-row.is-highlighted {
-  background: rgb(var(--primary) / 0.18);
-  color: rgb(var(--primary));
-  box-shadow: inset 2px 0 0 rgb(var(--primary));
-}
-
-.file-tree-row.is-highlighted .label {
-  color: rgb(var(--primary));
-}
-
-.caret {
-  width: 10px;
-  height: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgb(var(--muted));
-  transition: transform 0.12s;
-  flex-shrink: 0;
-}
-
-.caret.open {
-  transform: rotate(90deg);
-}
-
-.caret-spacer {
-  width: 10px;
-  flex-shrink: 0;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color 0.25s ease;
-}
-
-.label.folder {
-  color: rgb(var(--foreground));
-  font-weight: 600;
-}
-</style>

@@ -4,57 +4,62 @@
          Client-only: interactive config + props from useFetch would otherwise
          drift between SSR and client and trigger hydration mismatches. -->
     <ClientOnly v-if="!started">
-      <div class="evolution-stage evolution-idle">
-      <div class="evolution-card" @click.stop>
-        <div class="evolution-config">
-          <div class="config-row">
-            <span class="config-label">Source</span>
-            <div class="seg">
+      <div class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
+      <div class="min-w-[320px] bg-bg/55 border border-[rgb(var(--border))] rounded-md overflow-hidden" @click.stop>
+        <div class="flex flex-col gap-2.5 pt-[18px] px-[18px] pb-4">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Source</span>
+            <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
                 type="button"
-                :class="['seg-btn', source === 'tags' && 'seg-on']"
+                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="source === 'tags' ? 'bg-primary text-bg' : 'hover:text-fg'"
                 @click="source = 'tags'"
               >Tags</button>
               <button
                 type="button"
-                :class="['seg-btn', source === 'commits' && 'seg-on']"
+                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="source === 'commits' ? 'bg-primary text-bg' : 'hover:text-fg'"
                 @click="source = 'commits'"
               >Commits</button>
             </div>
           </div>
 
-          <div v-if="source === 'commits' && branches.length" class="config-row">
-            <span class="config-label">Branch</span>
-            <select v-model="branch" class="config-select">
+          <div v-if="source === 'commits' && branches.length" class="flex items-center justify-between gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Branch</span>
+            <select v-model="branch" class="py-1 px-2 text-[11px] text-fg bg-bg/60 border border-[rgb(var(--border))] rounded max-w-[180px]">
               <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
             </select>
           </div>
 
-          <div class="config-row">
-            <span class="config-label">Versions</span>
-            <div class="seg">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Versions</span>
+            <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
                 v-for="opt in limitOptions"
                 :key="opt"
                 type="button"
-                :class="['seg-btn', limit === opt && 'seg-on']"
+                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="limit === opt ? 'bg-primary text-bg' : 'hover:text-fg'"
                 @click="limit = opt"
               >{{ opt }}</button>
             </div>
           </div>
 
-          <div class="config-row">
-            <span class="config-label">Sampling</span>
-            <div class="seg">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Sampling</span>
+            <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
                 type="button"
-                :class="['seg-btn', sampling === 'spread' && 'seg-on']"
+                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="sampling === 'spread' ? 'bg-primary text-bg' : 'hover:text-fg'"
                 title="Evenly spaced across history"
                 @click="sampling = 'spread'"
               >Spread</button>
               <button
                 type="button"
-                :class="['seg-btn', sampling === 'latest' && 'seg-on']"
+                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="sampling === 'latest' ? 'bg-primary text-bg' : 'hover:text-fg'"
                 title="Most recent only"
                 @click="sampling = 'latest'"
               >Latest</button>
@@ -62,9 +67,9 @@
           </div>
         </div>
 
-        <div class="evolution-card-footer">
+        <div class="flex justify-center py-3 px-[18px] border-t border-[rgb(var(--border))] bg-bg/40">
           <button
-            class="play-button"
+            class="inline-flex items-center gap-[7px] py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-bg"
             type="button"
             aria-label="Load and play evolution"
             @click="start"
@@ -79,26 +84,26 @@
       </div>
 
       <template #fallback>
-        <div class="evolution-stage">
+        <div class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
           <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
         </div>
       </template>
     </ClientOnly>
 
     <!-- Loading -->
-    <div v-else-if="loading" class="evolution-stage">
+    <div v-else-if="loading" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
       <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
       <p class="text-xs text-[rgb(var(--muted))] mt-3">Loading evolution data...</p>
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="evolution-stage">
+    <div v-else-if="error" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
       <p class="text-xs text-red-400">{{ error }}</p>
       <button @click="loadEvolution()" class="text-xs link-primary mt-2">Try again</button>
     </div>
 
     <!-- No data -->
-    <div v-else-if="snapshots.length === 0" class="evolution-stage">
+    <div v-else-if="snapshots.length === 0" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
       <p class="text-xs text-[rgb(var(--muted))]">
         {{ source === 'tags'
           ? 'No version tags found in this repository.'
@@ -132,7 +137,7 @@
             </span>
           </div>
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
-            <span class="config-summary">
+            <span class="tabular-nums">
               {{ source }}{{ source === 'commits' ? `@${branch}` : '' }} · {{ snapshots.length }} · {{ sampling }}
             </span>
             <button @click="reconfigure" class="text-xs link-primary">Change</button>
@@ -140,7 +145,7 @@
             <span v-if="currentSnapshot">{{ formatDate(currentSnapshot.date) }}</span>
             <button
               type="button"
-              class="overlay-toggle"
+              class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
               :aria-label="expanded ? 'Collapse view' : 'Expand view'"
               :title="expanded ? 'Collapse (Esc)' : 'Expand'"
               @click="toggleExpand"
@@ -180,13 +185,13 @@
         </div>
 
         <!-- Canvas -->
-        <div class="canvas-wrapper relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
-          <div ref="diagramContainer" class="gource-container" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
+        <div class="relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
+          <div ref="diagramContainer" class="w-full bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
 
           <!-- File tooltip -->
           <div
             v-if="tooltip.visible"
-            class="file-tooltip"
+            class="absolute z-30 pointer-events-none bg-bg/95 backdrop-blur border border-[rgb(var(--border))] rounded py-1.5 px-2.5 flex flex-col gap-0.5 text-[11px] font-mono max-w-[320px] whitespace-nowrap overflow-hidden text-ellipsis"
             :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
           >
             <span class="text-[rgb(var(--muted))]">{{ tooltip.dir }}<span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span></span>
@@ -196,7 +201,7 @@
           <!-- Expanded tag message overlay -->
           <div
             v-if="messageExpanded && tagIsMultiline && currentSnapshot?.message"
-            class="message-overlay"
+            class="absolute top-3 left-3 right-3 z-[25] flex items-start gap-3 max-h-[calc(100%-24px)] bg-bg/85 backdrop-blur-[10px] border border-[rgb(var(--border))] rounded py-3 px-3.5 overflow-hidden"
             @pointerdown.stop
             @click.stop
           >
@@ -214,12 +219,12 @@
           </div>
 
           <!-- Files panel (left) -->
-          <div class="files-overlay" @pointerdown.stop @click.stop>
-            <div class="overlay-header">
-              <h4 class="overlay-title">Files</h4>
+          <div class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 left-3 w-[220px] max-h-[calc(100%-24px)] flex flex-col" @pointerdown.stop @click.stop>
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">Files</h4>
               <button
                 type="button"
-                class="overlay-toggle"
+                class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
                 :aria-label="filesPanelOpen ? 'Collapse files' : 'Expand files'"
                 :title="filesPanelOpen ? 'Collapse' : 'Expand'"
                 @click="filesPanelOpen = !filesPanelOpen"
@@ -230,7 +235,7 @@
                 </svg>
               </button>
             </div>
-            <div v-if="filesPanelOpen && fileTreeRoot" class="files-body">
+            <div v-if="filesPanelOpen && fileTreeRoot" class="mt-1.5 overflow-y-auto overflow-x-hidden">
               <FileTreePanel
                 :nodes="fileTreeRoot.children"
                 :open-set="openFolders"
@@ -243,12 +248,12 @@
           </div>
 
           <!-- Legend (right, collapsible) -->
-          <div class="legend-overlay" @pointerdown.stop @click.stop>
-            <div class="overlay-header">
-              <h4 class="overlay-title">File types</h4>
+          <div class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 right-3" @pointerdown.stop @click.stop>
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">File types</h4>
               <button
                 type="button"
-                class="overlay-toggle"
+                class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
                 :aria-label="legendPanelOpen ? 'Collapse legend' : 'Expand legend'"
                 :title="legendPanelOpen ? 'Collapse' : 'Expand'"
                 @click="legendPanelOpen = !legendPanelOpen"
@@ -565,230 +570,3 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-/* Height + flex behaviour live in the template via Tailwind (fixed in normal
-   mode, flex-fill when expanded). Only the gradient backdrop stays here. */
-.gource-container {
-  background: rgb(var(--bg));
-  background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
-}
-
-.file-tooltip {
-  position: absolute;
-  z-index: 30;
-  pointer-events: none;
-  background: rgb(var(--bg) / 0.95);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  max-width: 320px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.legend-overlay,
-.files-overlay {
-  position: absolute;
-  top: 12px;
-  z-index: 20;
-  background: rgb(var(--bg) / 0.9);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-  padding: 8px 10px;
-}
-
-.legend-overlay {
-  right: 12px;
-}
-
-.files-overlay {
-  left: 12px;
-  width: 220px;
-  max-height: calc(100% - 24px);
-  display: flex;
-  flex-direction: column;
-}
-
-.files-body {
-  margin-top: 6px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.overlay-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.overlay-title {
-  font-size: 10px;
-  color: rgb(var(--muted));
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0;
-}
-
-.overlay-toggle {
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgb(var(--muted));
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  transition: color 0.12s, background-color 0.12s;
-}
-
-.overlay-toggle:hover {
-  color: rgb(var(--primary));
-  background: rgb(var(--border) / 0.5);
-}
-
-.message-overlay {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  z-index: 25;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  max-height: calc(100% - 24px);
-  background: rgb(var(--bg) / 0.85);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-  padding: 12px 14px;
-  overflow: hidden;
-}
-
-.evolution-stage {
-  width: 100%;
-  height: 500px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(ellipse at center, rgb(26 27 30) 0%, rgb(15 15 20) 100%);
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-}
-
-.evolution-card {
-  min-width: 320px;
-  background: rgb(var(--bg) / 0.55);
-  border: 1px solid rgb(var(--border));
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.evolution-config {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 18px 16px;
-}
-
-.evolution-card-footer {
-  display: flex;
-  justify-content: center;
-  padding: 12px 18px;
-  border-top: 1px solid rgb(var(--border));
-  background: rgb(var(--bg) / 0.4);
-}
-
-.config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.config-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgb(var(--muted));
-}
-
-.seg {
-  display: inline-flex;
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.seg-btn {
-  padding: 4px 10px;
-  font-size: 11px;
-  color: rgb(var(--muted));
-  background: transparent;
-  border-right: 1px solid rgb(var(--border));
-  transition: background-color 0.12s, color 0.12s;
-}
-
-.seg-btn:last-child {
-  border-right: none;
-}
-
-.seg-btn:hover {
-  color: rgb(var(--text));
-}
-
-.seg-on {
-  background: rgb(var(--primary));
-  color: rgb(var(--bg));
-}
-
-.seg-on:hover {
-  color: rgb(var(--bg));
-}
-
-.config-select {
-  padding: 4px 8px;
-  font-size: 11px;
-  color: rgb(var(--text));
-  background: rgb(var(--bg) / 0.6);
-  border: 1px solid rgb(var(--border));
-  border-radius: 4px;
-  max-width: 180px;
-}
-
-.config-summary {
-  font-variant: tabular-nums;
-}
-
-.evolution-idle .play-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 18px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 4px;
-  border: 1px solid rgb(var(--primary));
-  color: rgb(var(--primary));
-  background: transparent;
-  cursor: pointer;
-  transition: background-color 0.12s, color 0.12s;
-}
-
-.evolution-idle .play-button:hover {
-  background: rgb(var(--primary));
-  color: rgb(var(--bg));
-}
-</style>

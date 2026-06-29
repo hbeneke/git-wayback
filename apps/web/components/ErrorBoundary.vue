@@ -1,6 +1,6 @@
 <template>
   <slot v-if="!hasError" />
-  <div v-else class="error-boundary">
+  <div v-else class="w-full">
     <slot name="fallback" :error="error" :reset="reset">
       <div class="py-8 text-center">
         <h3 class="text-sm font-semibold mb-1">{{ title }}</h3>
@@ -61,9 +61,3 @@ defineExpose({
   error,
 })
 </script>
-
-<style scoped>
-.error-boundary {
-  width: 100%;
-}
-</style>
