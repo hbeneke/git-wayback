@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const noTag = args.includes("--no-tag");
+const major = args.includes("--major");
 const minor = args.includes("--minor");
 const patch = args.includes("--patch");
 
@@ -27,6 +28,8 @@ const execSilent = (command) => {
 
 if (noTag) {
   console.log("Syncing develop to master (without tagging)...\n");
+} else if (major) {
+  console.log("Syncing develop to master (major version bump)...\n");
 } else if (minor) {
   console.log("Syncing develop to master (minor version bump)...\n");
 } else if (patch) {
@@ -58,10 +61,24 @@ exec("git checkout master");
 console.log("Merging develop into master...");
 const env = noTag ? { ...process.env, SKIP_VERSION_BUMP: "1" } : process.env;
 
-if (minor) {
+if (major) {
+  env.VERSION_BUMP_TYPE = "major";
+} else if (minor) {
   env.VERSION_BUMP_TYPE = "minor";
 } else if (patch) {
   env.VERSION_BUMP_TYPE = "patch";
+}
+
+// Guard: if the target branch already contains develop, the merge is a no-op
+// and the post-merge hook never runs, so no version bump happens. Warn instead
+// of reporting a misleading success.
+const behind = execSilent("git rev-list --count HEAD..develop");
+if (behind === "0") {
+  console.warn(
+    "Warning: target branch already up to date with develop - nothing to merge.\n" +
+      "   No version bump will occur (post-merge hook only runs on a real merge).\n" +
+      "   Commit a change on develop first if you intended to bump.",
+  );
 }
 
 try {
@@ -142,7 +159,9 @@ if (noTag) {
   try {
     const packageJson = JSON.parse(readFileSync("./package.json", "utf8"));
     console.log(`Version: ${packageJson.version}`);
-    if (minor) {
+    if (major) {
+      console.log("   Version bump type: major (first digit)");
+    } else if (minor) {
       console.log("   Version bump type: minor (second digit)");
     } else if (patch) {
       console.log("   Version bump type: patch (third digit)");
