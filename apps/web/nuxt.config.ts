@@ -1,7 +1,14 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
-  modules: ['@nuxtjs/tailwindcss'],
+  modules: ['@nuxtjs/tailwindcss', '@vercel/analytics/nuxt'],
+
+  // Treat parley web components as custom elements, not Vue components
+  vue: {
+    compilerOptions: {
+      isCustomElement: (tag) => tag === 'site-footer',
+    },
+  },
 
   tailwindcss: {
     cssPath: '~/assets/css/main.css',
