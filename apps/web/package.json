@@ -14,7 +14,7 @@
   "dependencies": {
     "@git-wayback/db": "workspace:*",
     "@git-wayback/shared": "workspace:*",
-    "@hbeneke/parley": "^0.1.2",
+    "@hbeneke/parley": "^0.2.3",
     "@nuxtjs/tailwindcss": "^6.14.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
