@@ -36,11 +36,20 @@ export interface EvolutionResponse {
 export interface TreeNode {
   name: string
   path: string
-  type: 'file' | 'folder'
+  /** 'more' is a synthetic node standing in for files collapsed out of view. */
+  type: 'file' | 'folder' | 'more'
   extension?: string | null
   size?: number
+  /** Files represented by a 'more' node. */
+  count?: number
   children: TreeNode[]
 }
+
+/**
+ * Rendered file bubbles are budgeted: past this many the graph is thinned per
+ * folder. Folders are never dropped, so the shape of the repo survives.
+ */
+export const RENDER_FILE_BUDGET = 1200
 
 export const EXTENSION_COLORS: Record<string, string> = {
   ts: '#3178c6',
@@ -108,6 +117,72 @@ export function buildTree(files: FileNode[], rootName: string): TreeNode {
   return root
 }
 
+function countFiles(node: TreeNode): number {
+  if (node.type === 'file') return 1
+  let n = 0
+  for (const c of node.children) n += countFiles(c)
+  return n
+}
+
+/** Folders holding at least one direct file — the ones a per-folder cap applies to. */
+function countFileHoldingFolders(node: TreeNode): number {
+  if (node.type !== 'folder') return 0
+  let n = node.children.some((c) => c.type === 'file') ? 1 : 0
+  for (const c of node.children) n += countFileHoldingFolders(c)
+  return n
+}
+
+function collapseNode(node: TreeNode, perFolder: number, keepExpanded: Set<string>): TreeNode {
+  if (node.type !== 'folder') return node
+
+  const files: TreeNode[] = []
+  const folders: TreeNode[] = []
+  for (const c of node.children) {
+    if (c.type === 'folder') folders.push(collapseNode(c, perFolder, keepExpanded))
+    else files.push(c)
+  }
+
+  if (keepExpanded.has(node.path) || files.length <= perFolder) {
+    return { ...node, children: [...folders, ...files] }
+  }
+
+  // Biggest files first: they carry the most signal about what a folder holds.
+  const sorted = [...files].sort((a, b) => (b.size || 0) - (a.size || 0))
+  const hidden = files.length - perFolder
+
+  return {
+    ...node,
+    children: [
+      ...folders,
+      ...sorted.slice(0, perFolder),
+      {
+        name: `+${hidden}`,
+        path: `${node.path}/__more__`,
+        type: 'more',
+        count: hidden,
+        children: [],
+      },
+    ],
+  }
+}
+
+/**
+ * Thins the tree so the renderer stays under `budget` file bubbles: each folder
+ * keeps its largest files and gets one 'more' node for the rest. Folders in
+ * `keepExpanded` are left whole (the user clicked their 'more' node).
+ * Returns the tree untouched when it already fits.
+ */
+export function collapseTree(
+  root: TreeNode,
+  budget = RENDER_FILE_BUDGET,
+  keepExpanded: Set<string> = new Set(),
+): TreeNode {
+  if (countFiles(root) <= budget) return root
+  const folders = Math.max(countFileHoldingFolders(root), 1)
+  const perFolder = Math.max(2, Math.floor(budget / folders))
+  return collapseNode(root, perFolder, keepExpanded)
+}
+
 export function getExtensionColor(ext: string | null): string {
   if (!ext) return EXTENSION_COLORS.other
   return EXTENSION_COLORS[ext.toLowerCase()] || EXTENSION_COLORS.other
@@ -115,11 +190,13 @@ export function getExtensionColor(ext: string | null): string {
 
 export function getNodeColor(data: TreeNode): string {
   if (data.type === 'folder') return 'rgb(16, 185, 129)'
+  if (data.type === 'more') return EXTENSION_COLORS.other
   return getExtensionColor(data.extension || null)
 }
 
 export function getFileKind(data: TreeNode): string {
   if (data.type === 'folder') return 'folder'
+  if (data.type === 'more') return `${data.count} more files — click to expand`
   if (!data.extension) return 'file'
   const ext = data.extension.toLowerCase()
   return FILE_KINDS[ext] || ext + ' file'

@@ -74,15 +74,21 @@
 
         <div class="flex justify-center py-3 px-[18px] border-t border-[rgb(var(--border))] bg-bg/40">
           <button
-            class="inline-flex items-center gap-[7px] py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-bg"
+            class="inline-flex items-center gap-[7px] py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
             type="button"
-            aria-label="Load and play evolution"
+            aria-label="Build the evolution timeline"
             @click="start"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M8 5v14l11-7z" />
+            <!-- Commit graph: this step fetches and builds the timeline,
+                 playback is a separate action once it's on screen. -->
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+              <path d="M2 8h3 M8 8h6" />
+              <path d="M8 8V4h6" />
+              <circle cx="6.5" cy="8" r="1.6" fill="currentColor" stroke="none" />
+              <circle cx="14" cy="4" r="1.6" />
+              <circle cx="14" cy="8" r="1.6" />
             </svg>
-            <span>Play</span>
+            <span>Build timeline</span>
           </button>
         </div>
       </div>
@@ -98,7 +104,7 @@
     <!-- Loading -->
     <div v-else-if="loading" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
       <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
-      <p class="text-xs text-[rgb(var(--muted))] mt-3">Loading evolution data...</p>
+      <p class="text-xs text-[rgb(var(--muted))] mt-3">Building timeline...</p>
     </div>
 
     <!-- Error -->
@@ -139,6 +145,13 @@
               title="GitHub truncated the recursive tree — this snapshot's file list is incomplete."
             >
               partial
+            </span>
+            <span
+              v-if="collapsedFiles > 0"
+              class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-[rgb(var(--border))] text-[rgb(var(--muted))]"
+              :title="`${collapsedFiles} files folded into '+N' bubbles to keep the graph fast — click one to expand its folder.`"
+            >
+              {{ collapsedFiles }} folded
             </span>
           </div>
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
@@ -197,14 +210,15 @@
                snapshot is rendered and waits here for an explicit start. -->
           <div
             v-if="showCenterPlay"
-            class="absolute inset-0 z-[22] flex items-center justify-center pointer-events-none"
+            class="absolute inset-0 z-[28] flex items-center justify-center bg-[rgb(var(--bg))]/55 backdrop-blur-[2px] cursor-pointer"
+            @click="startPlayback"
           >
             <button
               type="button"
               aria-label="Play evolution"
               title="Play evolution"
-              class="pointer-events-auto w-16 h-16 rounded-full flex items-center justify-center border border-primary text-primary bg-bg/70 backdrop-blur transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
-              @click="startPlayback"
+              class="w-16 h-16 rounded-full flex items-center justify-center border border-primary text-primary bg-bg/70 backdrop-blur transition-all duration-150 hover:scale-110 hover:bg-primary hover:text-[rgb(var(--bg))]"
+              @click.stop="startPlayback"
             >
               <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M8 5v14l11-7z" />
@@ -442,7 +456,7 @@ function seekTo(i: number) {
   playbackStarted.value = true
   currentIndex.value = i
 }
-const { initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath } = useDiagramRenderer(
+const { collapsedFiles, initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath } = useDiagramRenderer(
   diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip, hoveredGraphPath,
   onGraphNodeClick, expanded,
 )

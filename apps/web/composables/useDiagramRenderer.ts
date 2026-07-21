@@ -7,6 +7,8 @@ import {
 import type { TreeNode, TagSnapshot } from './useDiagramTree'
 import {
   buildTree,
+  collapseTree,
+  RENDER_FILE_BUDGET,
   getExtensionColor,
   getNodeColor,
   getFileKind,
@@ -53,9 +55,17 @@ export function useDiagramRenderer(
 
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
   let svgRoot: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
+  // Folders whose 'more' bubble the user clicked — rendered in full from then on.
+  const expandedFolders = new Set<string>()
+  /** Files currently folded into 'more' bubbles; 0 when the whole tree is drawn. */
+  const collapsedFiles = ref(0)
+
   function getNodeRadius(d: d3.HierarchyNode<TreeNode>): number {
     if (d.data.type === 'folder') {
       return d.depth === 0 ? 6 : 3
+    }
+    if (d.data.type === 'more') {
+      return Math.max(6, Math.min(12, 4 + Math.sqrt(d.data.count || 1)))
     }
     return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
   }
@@ -147,7 +157,14 @@ export function useDiagramRenderer(
   ) {
     if (!currentSnapshot.value) return
 
-    const tree = buildTree(currentSnapshot.value.files, repoName.value)
+    // Thin the tree before laying it out: on a big repo most of the cost is
+    // simply the number of SVG elements, so cap files per folder and stand the
+    // remainder up as one clickable 'more' bubble.
+    const tree = collapseTree(
+      buildTree(currentSnapshot.value.files, repoName.value),
+      RENDER_FILE_BUDGET,
+      expandedFolders,
+    )
     const root = d3.hierarchy(tree)
 
     const treeLayout = d3.tree<TreeNode>()
@@ -158,17 +175,22 @@ export function useDiagramRenderer(
     const nodes = treeData.descendants()
     const links = treeData.links()
 
+    collapsedFiles.value = nodes.reduce(
+      (n, d) => (d.data.type === 'more' ? n + (d.data.count || 0) : n),
+      0,
+    )
+
     const radialPoint = (x: number, y: number): [number, number] => {
       return [(y) * Math.cos(x - Math.PI / 2) + centerX, (y) * Math.sin(x - Math.PI / 2) + centerY]
     }
 
     const visibleNodes = nodes.filter(d => {
-      if (d.data.type === 'folder') return true
+      if (d.data.type !== 'file') return true
       return !isExtensionHidden(d.data.extension || null)
     })
 
     const visibleLinks = links.filter(d => {
-      if (d.target.data.type === 'folder') return true
+      if (d.target.data.type !== 'file') return true
       return !isExtensionHidden(d.target.data.extension || null)
     })
 
@@ -241,10 +263,23 @@ export function useDiagramRenderer(
         if (d.data.type === 'folder') {
           return d.depth === 0 ? 'rgb(16, 185, 129)' : 'rgba(16, 185, 129, 0.4)'
         }
+        if (d.data.type === 'more') return 'rgba(107, 114, 128, 0.35)'
         return getExtensionColor(d.data.extension || null)
       })
       .attr('stroke', (d) => strokeFor(getNodeColor(d.data)))
-      .attr('stroke-width', 1)
+      .attr('stroke-width', (d) => (d.data.type === 'more' ? 1.2 : 1))
+      .attr('stroke-dasharray', (d) => (d.data.type === 'more' ? '2 2' : null))
+
+    // Count label, only on the handful of 'more' bubbles.
+    nodeEnter.filter((d) => d.data.type === 'more')
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.34em')
+      .attr('font-size', 8)
+      .attr('fill', '#d4d4d4')
+      .style('pointer-events', 'none')
+      .style('user-select', 'none')
+      .text((d) => d.data.name)
 
     const nodeUpdate = nodeEnter.merge(nodeSelection)
 
@@ -342,6 +377,16 @@ export function useDiagramRenderer(
         if (!sel) return
         event.stopPropagation()
         const d = sel.datum()
+
+        // Clicking a 'more' bubble reveals the folder it stands for, and keeps
+        // it revealed across snapshots.
+        if (d.data.type === 'more') {
+          expandedFolders.add(d.parent?.data.path ?? '')
+          tooltip.value.visible = false
+          updateTree()
+          return
+        }
+
         showTooltip(event, d.data)
         onNodeClick(d.data.path || d.data.name)
       })
@@ -490,6 +535,7 @@ export function useDiagramRenderer(
   }
 
   return {
+    collapsedFiles,
     initGource,
     retryInitGource,
     updateTree,
