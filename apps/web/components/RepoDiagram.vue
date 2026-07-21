@@ -456,7 +456,7 @@ function seekTo(i: number) {
   playbackStarted.value = true
   currentIndex.value = i
 }
-const { collapsedFiles, initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath } = useDiagramRenderer(
+const { collapsedFiles, initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath, destroyRenderer } = useDiagramRenderer(
   diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip, hoveredGraphPath,
   onGraphNodeClick, expanded,
 )
@@ -548,6 +548,9 @@ async function start() {
 // Back to the config screen, keeping current selections
 function reconfigure() {
   stopPlay()
+  // The canvas is torn down with the view; stop the simulation so it does not
+  // keep ticking against detached nodes.
+  destroyRenderer()
   started.value = false
   playbackStarted.value = false
   error.value = null
@@ -638,6 +641,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   if (typeof document !== 'undefined') document.body.style.overflow = ''
   stopPlay()
+  destroyRenderer()
 })
 </script>
 
