@@ -27,8 +27,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@hbeneke/parley':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.2.3
+        version: 0.2.3
       '@nuxtjs/tailwindcss':
         specifier: ^6.14.0
         version: 6.14.0(magicast@0.5.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -899,8 +899,8 @@ packages:
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
 
-  '@hbeneke/parley@0.1.2':
-    resolution: {integrity: sha512-y/PYZG7U+lnYXbRWH7z2lGiR9GcIlFIfpHPX8awDKs35c1QIdgdOekBY0vb2dKvF5nOmL7sXml/Id8m45xkjRQ==}
+  '@hbeneke/parley@0.2.3':
+    resolution: {integrity: sha512-PucYyqrbmxjxwUMZ6xwTYk06cSA/DSOtydMiBjIZDDsA4PjPm7yLr1st1+tHOaFPbgYVvQ/eVgcuwgY3eVYukQ==}
 
   '@ioredis/commands@1.5.0':
     resolution: {integrity: sha512-eUgLqrMf8nJkZxT24JvVRrQya1vZkQh8BBeYNwGDqa5I0VUi8ACx7uFvAaLxintokpTenkK6DASvo/bvNbBGow==}
@@ -5409,7 +5409,7 @@ snapshots:
   '@fastify/busboy@2.1.1':
     optional: true
 
-  '@hbeneke/parley@0.1.2': {}
+  '@hbeneke/parley@0.2.3': {}
 
   '@ioredis/commands@1.5.0': {}
 
