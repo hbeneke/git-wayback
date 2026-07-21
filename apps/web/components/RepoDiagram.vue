@@ -12,14 +12,14 @@
             <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
                 type="button"
-                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
-                :class="source === 'tags' ? 'bg-primary text-bg' : 'hover:text-fg'"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="source === 'tags' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
                 @click="source = 'tags'"
               >Tags</button>
               <button
                 type="button"
-                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
-                :class="source === 'commits' ? 'bg-primary text-bg' : 'hover:text-fg'"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="source === 'commits' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
                 @click="source = 'commits'"
               >Commits</button>
             </div>
@@ -28,7 +28,12 @@
           <div v-if="source === 'commits' && branches.length" class="flex items-center justify-between gap-3">
             <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Branch</span>
             <select v-model="branch" class="py-1 px-2 text-[11px] text-fg bg-bg/60 border border-[rgb(var(--border))] rounded max-w-[180px]">
-              <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
+              <option
+                v-for="b in branches"
+                :key="b"
+                :value="b"
+                class="text-fg bg-[rgb(var(--bg))]"
+              >{{ b }}</option>
             </select>
           </div>
 
@@ -39,8 +44,8 @@
                 v-for="opt in limitOptions"
                 :key="opt"
                 type="button"
-                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
-                :class="limit === opt ? 'bg-primary text-bg' : 'hover:text-fg'"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="limit === opt ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
                 @click="limit = opt"
               >{{ opt }}</button>
             </div>
@@ -51,15 +56,15 @@
             <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
                 type="button"
-                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
-                :class="sampling === 'spread' ? 'bg-primary text-bg' : 'hover:text-fg'"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="sampling === 'spread' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
                 title="Evenly spaced across history"
                 @click="sampling = 'spread'"
               >Spread</button>
               <button
                 type="button"
-                class="py-1 px-2.5 text-[11px] text-[rgb(var(--muted))] bg-transparent border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
-                :class="sampling === 'latest' ? 'bg-primary text-bg' : 'hover:text-fg'"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="sampling === 'latest' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
                 title="Most recent only"
                 @click="sampling = 'latest'"
               >Latest</button>
@@ -188,6 +193,25 @@
         <div class="relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
           <div ref="diagramContainer" class="w-full bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
 
+          <!-- Center play overlay: loading no longer autoplays, the first
+               snapshot is rendered and waits here for an explicit start. -->
+          <div
+            v-if="showCenterPlay"
+            class="absolute inset-0 z-[22] flex items-center justify-center pointer-events-none"
+          >
+            <button
+              type="button"
+              aria-label="Play evolution"
+              title="Play evolution"
+              class="pointer-events-auto w-16 h-16 rounded-full flex items-center justify-center border border-primary text-primary bg-bg/70 backdrop-blur transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
+              @click="startPlayback"
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+          </div>
+
           <!-- File tooltip -->
           <div
             v-if="tooltip.visible"
@@ -283,7 +307,7 @@
         <div class="px-4 py-3 border-t border-[rgb(var(--border))] relative z-10">
           <div class="flex items-center gap-3">
             <button
-              @click="togglePlay"
+              @click="onTogglePlay"
               class="w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border"
               :class="isPlaying
                 ? 'border-primary text-primary'
@@ -298,7 +322,7 @@
                 <button
                   v-for="(snap, i) in snapshots"
                   :key="snap.tag"
-                  @click="currentIndex = i"
+                  @click="seekTo(i)"
                   @mouseenter="hoveredIndex = i"
                   @mouseleave="hoveredIndex = null"
                   class="flex-1 rounded-sm transition-all duration-150 cursor-pointer"
@@ -397,6 +421,27 @@ const fileTreeRoot = computed(() => {
 })
 
 const { isPlaying, togglePlay, stopPlay } = useDiagramPlayback(currentIndex, totalSnapshots)
+
+// Loading renders the first snapshot but does not autoplay; the centered
+// overlay is the explicit start. It stays out of the way once the user has
+// taken control of playback (play pressed or timeline scrubbed).
+const playbackStarted = ref(false)
+const showCenterPlay = computed(() => !isPlaying.value && !playbackStarted.value)
+
+function startPlayback() {
+  playbackStarted.value = true
+  if (!isPlaying.value) togglePlay()
+}
+
+function onTogglePlay() {
+  playbackStarted.value = true
+  togglePlay()
+}
+
+function seekTo(i: number) {
+  playbackStarted.value = true
+  currentIndex.value = i
+}
 const { initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath } = useDiagramRenderer(
   diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip, hoveredGraphPath,
   onGraphNodeClick, expanded,
@@ -482,16 +527,15 @@ async function loadEvolution() {
 
 async function start() {
   started.value = true
+  playbackStarted.value = false
   await loadEvolution()
-  if (snapshots.value.length > 0 && !error.value) {
-    togglePlay()
-  }
 }
 
 // Back to the config screen, keeping current selections
 function reconfigure() {
   stopPlay()
   started.value = false
+  playbackStarted.value = false
   error.value = null
   snapshots.value = []
   currentIndex.value = 0
@@ -535,9 +579,21 @@ function toggleExtension(ext: string) {
   updateTree()
 }
 
+// On big repos a redraw can take longer than the playback interval. Coalescing
+// into one rAF means a backlog of ticks collapses to a single render of the
+// latest snapshot instead of queueing frames the browser can't keep up with.
+let redrawFrame: number | null = null
+function scheduleRedraw() {
+  if (redrawFrame !== null) return
+  redrawFrame = requestAnimationFrame(() => {
+    redrawFrame = null
+    updateTree()
+  })
+}
+
 watch(currentIndex, () => {
   messageExpanded.value = false
-  updateTree()
+  scheduleRedraw()
 })
 
 // Debounce resize redraws and avoid the full rebuild path — updateTree reuses
@@ -564,6 +620,7 @@ onMounted(() => {
 onUnmounted(() => {
   resizeObserver.disconnect()
   if (resizeTimer) clearTimeout(resizeTimer)
+  if (redrawFrame !== null) cancelAnimationFrame(redrawFrame)
   window.removeEventListener('keydown', onKeydown)
   if (typeof document !== 'undefined') document.body.style.overflow = ''
   stopPlay()

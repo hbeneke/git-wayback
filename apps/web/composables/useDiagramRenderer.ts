@@ -19,6 +19,22 @@ const HOVER_SCALE = 2.2
 // Links inherit the connected (target) node's color; this keeps them subtle
 // at rest while hover bumps the opacity to full.
 const LINK_BASE_OPACITY = 0.35
+// Above this many visible nodes the enter/update transitions are dropped.
+// Interpolating attributes on thousands of SVG elements at 60fps is what makes
+// large repos crawl; past the threshold snapshots swap instantly instead.
+const ANIMATE_MAX_NODES = 900
+
+// darken() re-parses the color string on every call. The palette is tiny, so
+// cache the derived stroke colors across renders.
+const strokeCache = new Map<string, string>()
+function strokeFor(color: string): string {
+  let s = strokeCache.get(color)
+  if (!s) {
+    s = darken(color, 0.75)
+    strokeCache.set(color, s)
+  }
+  return s
+}
 
 export function useDiagramRenderer(
   diagramContainer: Ref<HTMLElement | null>,
@@ -156,16 +172,22 @@ export function useDiagramRenderer(
       return !isExtensionHidden(d.target.data.extension || null)
     })
 
+    // Hover/click handlers are delegated once on the two groups (see
+    // bindDelegatedEvents), so nothing below attaches per-element listeners:
+    // on a big repo that alone meant tens of thousands of closures per render.
+    const animate = visibleNodes.length <= ANIMATE_MAX_NODES
+
     // Links
     const linkSelection = linksGroup
       .selectAll<SVGPathElement, d3.HierarchyLink<TreeNode>>('path')
       .data(visibleLinks, (d) => `${d.source.data.path}-${d.target.data.path}`)
 
-    linkSelection.exit()
-      .transition()
-      .duration(D3_EXIT_TRANSITION_DURATION_MS)
-      .attr('opacity', 0)
-      .remove()
+    const linkExit = linkSelection.exit()
+    if (animate) {
+      linkExit.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 0).remove()
+    } else {
+      linkExit.remove()
+    }
 
     const linkEnter = linkSelection.enter()
       .append('path')
@@ -173,77 +195,47 @@ export function useDiagramRenderer(
       .attr('stroke', (d) => getNodeColor(d.target.data))
       .attr('stroke-opacity', LINK_BASE_OPACITY)
       .attr('stroke-width', 1)
-      .attr('opacity', 0)
+      .attr('opacity', animate ? 0 : 1)
 
     const linkMerged = linkEnter.merge(linkSelection)
 
-    linkMerged
-      .transition()
-      .duration(D3_TRANSITION_DURATION_MS)
-      .attr('opacity', 1)
-      .attr('stroke', (d) => getNodeColor(d.target.data))
-      .attr('d', (d) => {
-        const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
-        const [tx, ty] = radialPoint(d.target.x!, d.target.y!)
-        return `M${sx},${sy}L${tx},${ty}`
-      })
+    const linkPath = (d: d3.HierarchyLink<TreeNode>) => {
+      const [sx, sy] = radialPoint(d.source.x!, d.source.y!)
+      const [tx, ty] = radialPoint(d.target.x!, d.target.y!)
+      return `M${sx},${sy}L${tx},${ty}`
+    }
 
-    linkMerged
-      .style('cursor', 'pointer')
-      .style('pointer-events', 'visibleStroke')
-      .on('mouseover', function (event, d) {
-        d3.select(this)
-          .transition().duration(HOVER_TRANSITION_MS)
-          .attr('stroke', getNodeColor(d.target.data))
-          .attr('stroke-opacity', 1)
-          .attr('stroke-width', 1.5)
-        highlightNodeCircle(nodesGroup, d.target.data)
-        showTooltip(event, d.target.data)
-        hoveredGraphPath.value = d.target.data.path || d.target.data.name
-      })
-      .on('mousemove', function (event, d) {
-        showTooltip(event, d.target.data)
-      })
-      .on('mouseout', function (_event, d) {
-        d3.select(this)
-          .transition().duration(HOVER_TRANSITION_MS)
-          .attr('stroke', getNodeColor(d.target.data))
-          .attr('stroke-opacity', LINK_BASE_OPACITY)
-          .attr('stroke-width', 1)
-        unhighlightNodeCircle(nodesGroup, d.target.data)
-        tooltip.value.visible = false
-        hoveredGraphPath.value = null
-      })
+    if (animate) {
+      linkMerged
+        .transition()
+        .duration(D3_TRANSITION_DURATION_MS)
+        .attr('opacity', 1)
+        .attr('d', linkPath)
+    } else {
+      linkMerged.attr('opacity', 1).attr('d', linkPath)
+    }
 
     // Nodes
     const nodeSelection = nodesGroup
       .selectAll<SVGGElement, d3.HierarchyNode<TreeNode>>('g')
       .data(visibleNodes, (d) => d.data.path || d.data.name)
 
-    nodeSelection.exit()
-      .transition()
-      .duration(D3_EXIT_TRANSITION_DURATION_MS)
-      .attr('opacity', 0)
-      .remove()
+    const nodeExit = nodeSelection.exit()
+    if (animate) {
+      nodeExit.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 0).remove()
+    } else {
+      nodeExit.remove()
+    }
 
     const nodeEnter = nodeSelection.enter()
       .append('g')
-      .attr('opacity', 0)
+      .attr('opacity', animate ? 0 : 1)
 
-    nodeEnter.append('circle').attr('class', 'main')
-
-    const nodeUpdate = nodeEnter.merge(nodeSelection)
-
-    nodeUpdate
-      .transition()
-      .duration(D3_TRANSITION_DURATION_MS)
-      .attr('opacity', 1)
-      .attr('transform', (d) => {
-        const [x, y] = radialPoint(d.x!, d.y!)
-        return `translate(${x},${y})`
-      })
-
-    nodeUpdate.select('circle.main')
+    // Nodes are keyed by path, so radius/fill/stroke never change once the
+    // element exists — set them on enter instead of rewriting every attribute
+    // of every circle on every snapshot.
+    nodeEnter.append('circle')
+      .attr('class', 'main')
       .attr('r', (d) => getNodeRadius(d))
       .attr('fill', (d) => {
         if (d.data.type === 'folder') {
@@ -251,33 +243,105 @@ export function useDiagramRenderer(
         }
         return getExtensionColor(d.data.extension || null)
       })
-      .attr('stroke', (d) => darken(getNodeColor(d.data), 0.75))
+      .attr('stroke', (d) => strokeFor(getNodeColor(d.data)))
       .attr('stroke-width', 1)
 
-    nodeUpdate
-      .select('circle.main')
-      .style('cursor', 'pointer')
-      .on('mouseover', function (event, d) {
-        d3.select(this)
-          .transition().duration(HOVER_TRANSITION_MS)
-          .attr('r', getNodeRadius(d) * HOVER_SCALE)
+    const nodeUpdate = nodeEnter.merge(nodeSelection)
+
+    const nodeTransform = (d: d3.HierarchyNode<TreeNode>) => {
+      const [x, y] = radialPoint(d.x!, d.y!)
+      return `translate(${x},${y})`
+    }
+
+    if (animate) {
+      nodeUpdate
+        .transition()
+        .duration(D3_TRANSITION_DURATION_MS)
+        .attr('opacity', 1)
+        .attr('transform', nodeTransform)
+    } else {
+      nodeUpdate.attr('opacity', 1).attr('transform', nodeTransform)
+    }
+  }
+
+  // One listener per group rather than per element. Events bubble up from the
+  // circles/paths, so the datum is read off event.target.
+  function bindDelegatedEvents(
+    linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+    nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  ) {
+    linksGroup.style('cursor', 'pointer').style('pointer-events', 'visibleStroke')
+    nodesGroup.style('cursor', 'pointer')
+
+    const linkAt = (event: Event) => {
+      const t = event.target as Element | null
+      if (!t || t.tagName !== 'path') return null
+      return d3.select<SVGPathElement, d3.HierarchyLink<TreeNode>>(t as SVGPathElement)
+    }
+    const circleAt = (event: Event) => {
+      const t = event.target as Element | null
+      if (!t || t.tagName !== 'circle') return null
+      return d3.select<SVGCircleElement, d3.HierarchyNode<TreeNode>>(t as SVGCircleElement)
+    }
+
+    linksGroup
+      .on('mouseover', (event: MouseEvent) => {
+        const sel = linkAt(event)
+        if (!sel) return
+        const d = sel.datum()
+        sel.transition().duration(HOVER_TRANSITION_MS)
+          .attr('stroke-opacity', 1)
+          .attr('stroke-width', 1.5)
+        highlightNodeCircle(nodesGroup, d.target.data)
+        showTooltip(event, d.target.data)
+        hoveredGraphPath.value = d.target.data.path || d.target.data.name
+      })
+      .on('mousemove', (event: MouseEvent) => {
+        const sel = linkAt(event)
+        if (!sel) return
+        showTooltip(event, sel.datum().target.data)
+      })
+      .on('mouseout', (event: MouseEvent) => {
+        const sel = linkAt(event)
+        if (!sel) return
+        const d = sel.datum()
+        sel.transition().duration(HOVER_TRANSITION_MS)
+          .attr('stroke-opacity', LINK_BASE_OPACITY)
+          .attr('stroke-width', 1)
+        unhighlightNodeCircle(nodesGroup, d.target.data)
+        tooltip.value.visible = false
+        hoveredGraphPath.value = null
+      })
+
+    nodesGroup
+      .on('mouseover', (event: MouseEvent) => {
+        const sel = circleAt(event)
+        if (!sel) return
+        const d = sel.datum()
+        sel.transition().duration(HOVER_TRANSITION_MS).attr('r', getNodeRadius(d) * HOVER_SCALE)
         highlightParentLink(linksGroup, d.data)
         showTooltip(event, d.data)
         hoveredGraphPath.value = d.data.path || d.data.name
       })
-      .on('mousemove', function (event, d) {
-        showTooltip(event, d.data)
+      .on('mousemove', (event: MouseEvent) => {
+        const sel = circleAt(event)
+        if (!sel) return
+        showTooltip(event, sel.datum().data)
       })
-      .on('mouseout', function (_event, d) {
-        d3.select(this)
-          .transition().duration(HOVER_TRANSITION_MS)
-          .attr('r', getNodeRadius(d))
+      .on('mouseout', (event: MouseEvent) => {
+        const sel = circleAt(event)
+        if (!sel) return
+        const d = sel.datum()
+        sel.transition().duration(HOVER_TRANSITION_MS).attr('r', getNodeRadius(d))
         unhighlightParentLink(linksGroup, d.data)
         tooltip.value.visible = false
         hoveredGraphPath.value = null
       })
-      .on('click', function (event, d) {
+      .on('click', (event: MouseEvent) => {
+        const sel = circleAt(event)
+        if (!sel) return
         event.stopPropagation()
+        const d = sel.datum()
         showTooltip(event, d.data)
         onNodeClick(d.data.path || d.data.name)
       })
@@ -300,6 +364,8 @@ export function useDiagramRenderer(
       .attr('width', width)
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height])
+      // Cheaper rasterization for thousands of small circles.
+      .style('shape-rendering', 'optimizeSpeed')
 
     const g = svg.append('g')
 
@@ -315,6 +381,7 @@ export function useDiagramRenderer(
     const linksGroup = g.append('g').attr('class', 'links')
     const nodesGroup = g.append('g').attr('class', 'nodes')
 
+    bindDelegatedEvents(linksGroup, nodesGroup)
     renderTree(linksGroup, nodesGroup, width, height, centerX, centerY)
   }
 
