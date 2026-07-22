@@ -15,17 +15,66 @@
     <template v-else-if="data">
       <!-- Header -->
       <header class="mb-8">
-        <h1 class="text-xl font-semibold">{{ data.fullName }}</h1>
-        <p v-if="data.description" class="text-sm text-[rgb(var(--muted))] mt-1">{{ data.description }}</p>
-        <div class="flex items-center gap-4 mt-3 text-xs text-[rgb(var(--muted))]">
-          <span>{{ formatNumber(data.stars) }} stars</span>
-          <span>&middot;</span>
-          <span>{{ formatNumber(data.forks) }} forks</span>
-          <span>&middot;</span>
-          <span>{{ formatNumber(data.watchers) }} watchers</span>
-          <span>&middot;</span>
-          <a :href="data.url" target="_blank" class="link-primary">github</a>
+        <div class="flex items-start gap-3">
+          <img
+            :src="`https://github.com/${owner}.png`"
+            :alt="`${owner} avatar`"
+            class="w-10 h-10 rounded shrink-0 mt-0.5 border border-[rgb(var(--border)/.5)]"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="min-w-0">
+            <h1 class="text-xl font-semibold leading-tight truncate">
+              <span class="text-[rgb(var(--muted))] font-normal">{{ owner }}/</span>{{ data.name }}
+            </h1>
+            <p v-if="data.description" class="text-sm text-[rgb(var(--muted))] mt-1">{{ data.description }}</p>
+          </div>
+          <span
+            v-if="data.archived"
+            class="ml-auto shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-400"
+          >
+            archived
+          </span>
         </div>
+
+        <!-- Plain counters, not links: GitHub 404s /stargazers and /watchers
+             when the count is 0, which is most repositories. -->
+        <div class="flex flex-wrap items-center gap-2 mt-4">
+          <div
+            v-for="stat in stats"
+            :key="stat.label"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[rgb(var(--border)/.5)] bg-[rgb(var(--border)/.15)] text-xs"
+          >
+            <svg
+              width="12" height="12" viewBox="0 0 16 16"
+              :fill="stat.filled ? 'currentColor' : 'none'"
+              stroke="currentColor"
+              :stroke-width="stat.filled ? 0 : 1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :class="stat.iconClass"
+              aria-hidden="true"
+            >
+              <path :d="stat.icon" />
+              <circle v-for="c in stat.circles || []" :key="c.cx" :cx="c.cx" :cy="c.cy" r="1.8" />
+            </svg>
+            <span class="font-semibold tabular-nums">{{ formatNumber(stat.value) }}</span>
+            <span class="text-[rgb(var(--muted))]">{{ stat.label }}</span>
+          </div>
+
+          <a
+            :href="data.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-primary/40 text-xs text-primary transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <span>github</span>
+          </a>
+        </div>
+
         <div v-if="data.topics?.length" class="flex flex-wrap gap-1.5 mt-3">
           <span
             v-for="topic in data.topics"
@@ -295,6 +344,37 @@ const { data, pending, error } = await useFetch<RepoData>(
     key: `repo-${owner.value}-${repo.value}`,
   }
 )
+
+/** Counter chips in the page header. */
+const stats = computed(() => {
+  if (!data.value) return []
+  return [
+    {
+      label: 'stars',
+      value: data.value.stars,
+      filled: true,
+      iconClass: 'text-secondary',
+      icon: 'M8 .8l2.2 4.46 4.92.72-3.56 3.47.84 4.9L8 12.03l-4.4 2.32.84-4.9L.88 5.98l4.92-.72L8 .8Z',
+    },
+    {
+      label: 'forks',
+      value: data.value.forks,
+      iconClass: 'text-primary',
+      icon: 'M5 4.8v.7A2.5 2.5 0 0 0 7.5 8h1A2.5 2.5 0 0 0 11 5.5v-.7M8 8v3.2',
+      circles: [
+        { cx: 5, cy: 3 },
+        { cx: 11, cy: 3 },
+        { cx: 8, cy: 13 },
+      ],
+    },
+    {
+      label: 'watchers',
+      value: data.value.watchers,
+      iconClass: 'text-[rgb(var(--muted))]',
+      icon: 'M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8Z M8 9.8A1.8 1.8 0 1 0 8 6.2a1.8 1.8 0 0 0 0 3.6Z',
+    },
+  ]
+})
 
 onMounted(() => {
   if (!data.value) return
