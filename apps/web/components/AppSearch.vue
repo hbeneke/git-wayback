@@ -8,9 +8,11 @@
       @input="onInput"
       @focus="isOpen = true"
     />
-    <div
+    <AppSpinner
       v-if="isLoading"
-      class="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin"
+      size="xs"
+      label="Searching"
+      class="absolute right-2 top-1/2 -translate-y-1/2"
     />
 
     <div

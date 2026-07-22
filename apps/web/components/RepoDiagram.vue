@@ -74,20 +74,11 @@
 
         <div class="flex justify-center py-3 px-[18px] border-t border-[rgb(var(--border))] bg-bg/40">
           <button
-            class="inline-flex items-center gap-[7px] py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
+            class="inline-flex items-center py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
             type="button"
             aria-label="Build the evolution timeline"
             @click="start"
           >
-            <!-- Commit graph: this step fetches and builds the timeline,
-                 playback is a separate action once it's on screen. -->
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
-              <path d="M2 8h3 M8 8h6" />
-              <path d="M8 8V4h6" />
-              <circle cx="6.5" cy="8" r="1.6" fill="currentColor" stroke="none" />
-              <circle cx="14" cy="4" r="1.6" />
-              <circle cx="14" cy="8" r="1.6" />
-            </svg>
             <span>Build timeline</span>
           </button>
         </div>
@@ -96,14 +87,14 @@
 
       <template #fallback>
         <div class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
-          <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
+          <AppSpinner size="lg" />
         </div>
       </template>
     </ClientOnly>
 
     <!-- Loading -->
     <div v-else-if="loading" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
-      <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
+      <AppSpinner size="lg" label="Building timeline" />
       <p class="text-xs text-[rgb(var(--muted))] mt-3">Building timeline...</p>
     </div>
 

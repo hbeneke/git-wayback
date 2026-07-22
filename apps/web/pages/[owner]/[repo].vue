@@ -2,7 +2,7 @@
   <main class="max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-12">
     <!-- Loading -->
     <div v-if="pending" class="py-20 text-center">
-      <div class="inline-block w-4 h-4 border-2 border-[rgb(var(--border))] border-t-primary rounded-full animate-spin" />
+      <AppSpinner size="sm" />
     </div>
 
     <!-- Error -->
