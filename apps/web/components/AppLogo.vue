@@ -1,6 +1,9 @@
 <template>
-  <div class="logo-container w-16 h-16 flex items-center justify-center rounded-lg transition-all duration-300 hover:ring-1 hover:ring-[rgb(var(--secondary)/.3)]">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" class="w-full h-full rounded-lg">
+  <div
+    class="logo-container flex items-center justify-center transition-all duration-300 hover:ring-1 hover:ring-[rgb(var(--secondary)/.3)]"
+    :class="[size, rounded]"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" class="w-full h-full" :class="rounded">
       <rect width="64" height="64" rx="8" fill="#f7df1e"/>
       <g class="flower">
         <g fill="none" stroke="#000" stroke-width="1.2" stroke-linecap="round">
@@ -32,6 +35,18 @@
     </svg>
   </div>
 </template>
+
+<script setup lang="ts">
+/**
+ * Tailwind sizing/rounding classes for the mark — the header shrinks it on
+ * scroll, where it matches the portfolio listing on personal-site (w-5 h-5,
+ * `rounded`).
+ */
+withDefaults(
+  defineProps<{ size?: string; rounded?: string }>(),
+  { size: 'w-16 h-16', rounded: 'rounded-lg' }
+)
+</script>
 
 <style scoped>
 .flower {
