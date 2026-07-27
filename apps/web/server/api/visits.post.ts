@@ -1,14 +1,16 @@
 import { createDb, repoVisits } from '@git-wayback/db'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{
-    repoFullName: string
-    repoAvatar?: string
-  }>(event)
+  const body = await readBody<{ repoFullName?: unknown }>(event)
 
-  if (!body.repoFullName) {
-    throw createError({ statusCode: 400, message: 'repoFullName is required' })
-  }
+  // Free text from the client that ends up on the public rankings, so it is
+  // parsed into a real owner/repo pair rather than just checked for presence.
+  const { owner, repo } = parseRepoFullName(body?.repoFullName)
+  const repoFullName = `${owner}/${repo}`
+
+  // Derived, never read from the body: a caller-supplied URL would render as
+  // <img src> on the home page for every visitor.
+  const repoAvatar = `https://github.com/${owner}.png`
 
   // Visitor identifier = platform-trusted client IP. Raw x-forwarded-for is
   // NOT used here because it is client-controlled (see getTrustedClientIp).
@@ -23,8 +25,8 @@ export default defineEventHandler(async (event) => {
     .insert(repoVisits)
     .values({
       visitorId: visitorIp,
-      repoFullName: body.repoFullName,
-      repoAvatar: body.repoAvatar || null,
+      repoFullName,
+      repoAvatar,
       visitDay,
     })
     .onConflictDoNothing()

@@ -378,12 +378,11 @@ const stats = computed(() => {
 
 onMounted(() => {
   if (!data.value) return
+  // The avatar is derived server-side from the owner — sending it from here
+  // would just be a URL the server has to distrust anyway.
   $fetch('/api/visits', {
     method: 'POST',
-    body: {
-      repoFullName: data.value.fullName,
-      repoAvatar: `https://github.com/${owner.value}.png`,
-    },
+    body: { repoFullName: data.value.fullName },
   }).catch(() => {})
 })
 

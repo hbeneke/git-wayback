@@ -4,6 +4,7 @@ import {
   isValidGitHubOwner,
   isValidGitHubRepo,
   isValidGitRef,
+  splitRepoFullName,
 } from '../../../server/utils/validation'
 
 describe('isValidGitHubOwner', () => {
@@ -101,5 +102,36 @@ describe('isValidGitRef', () => {
     // biome-ignore lint/suspicious/noExplicitAny: testing wrong types
     expect(isValidGitRef(undefined as any)).toBe(false)
     expect(isValidGitRef('a'.repeat(256))).toBe(false)
+  })
+})
+
+describe('splitRepoFullName', () => {
+  it('splits a well-formed owner/repo pair', () => {
+    expect(splitRepoFullName('vercel/next.js')).toEqual({
+      owner: 'vercel',
+      repo: 'next.js',
+    })
+    expect(splitRepoFullName('  hbeneke/git-wayback  ')).toEqual({
+      owner: 'hbeneke',
+      repo: 'git-wayback',
+    })
+  })
+
+  it('rejects anything that is not exactly two valid segments', () => {
+    expect(splitRepoFullName('novalidseparator')).toBeNull()
+    expect(splitRepoFullName('too/many/segments')).toBeNull()
+    expect(splitRepoFullName('/leading')).toBeNull()
+    expect(splitRepoFullName('trailing/')).toBeNull()
+    expect(splitRepoFullName('-bad/owner')).toBeNull()
+    expect(splitRepoFullName('owner/.hidden')).toBeNull()
+  })
+
+  it('rejects the free-text payloads the rankings used to accept', () => {
+    expect(splitRepoFullName('<script>alert(1)</script>')).toBeNull()
+    expect(splitRepoFullName('a'.repeat(500))).toBeNull()
+    expect(splitRepoFullName('')).toBeNull()
+    expect(splitRepoFullName(null)).toBeNull()
+    expect(splitRepoFullName(42)).toBeNull()
+    expect(splitRepoFullName({ owner: 'x', repo: 'y' })).toBeNull()
   })
 })

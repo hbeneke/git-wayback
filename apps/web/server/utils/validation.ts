@@ -12,12 +12,14 @@ interface RepoParams {
   repo: string
 }
 
+// RegExp.test coerces its argument, so `test(null)` matches on the string
+// "null". Every predicate here therefore checks the type before the pattern.
 export function isValidGitHubOwner(owner: string): boolean {
-  return GITHUB_OWNER_PATTERN.test(owner)
+  return typeof owner === 'string' && GITHUB_OWNER_PATTERN.test(owner)
 }
 
 export function isValidGitHubRepo(repo: string): boolean {
-  return GITHUB_REPO_PATTERN.test(repo)
+  return typeof repo === 'string' && GITHUB_REPO_PATTERN.test(repo)
 }
 
 export function validateRepoParams(event: H3Event): RepoParams {
@@ -40,6 +42,46 @@ export function validateRepoParams(event: H3Event): RepoParams {
   }
 
   return { owner, repo }
+}
+
+/**
+ * Splits an "owner/repo" string into its parts, or null when it is not one.
+ *
+ * Route segments go through validateRepoParams; this is for free text, which
+ * is what the visits endpoint receives. Without it any string was accepted and
+ * surfaced verbatim in the public rankings.
+ */
+export function splitRepoFullName(input: unknown): RepoParams | null {
+  if (typeof input !== 'string') {
+    return null
+  }
+
+  const parts = input.trim().split('/')
+
+  if (parts.length !== 2) {
+    return null
+  }
+
+  const [owner, repo] = parts
+
+  if (!isValidGitHubOwner(owner) || !isValidGitHubRepo(repo)) {
+    return null
+  }
+
+  return { owner, repo }
+}
+
+export function parseRepoFullName(input: unknown): RepoParams {
+  const parsed = splitRepoFullName(input)
+
+  if (!parsed) {
+    throw createError({
+      statusCode: 400,
+      message: 'repoFullName must be a valid GitHub "owner/repo" pair.',
+    })
+  }
+
+  return parsed
 }
 
 export function validateSearchQuery(query: unknown): string {
@@ -102,7 +144,7 @@ export function isValidGitRef(ref: string): boolean {
 }
 
 export function isValidCommitSha(sha: string): boolean {
-  return /^[a-f0-9]{7,40}$/i.test(sha)
+  return typeof sha === 'string' && /^[a-f0-9]{7,40}$/i.test(sha)
 }
 
 export function validateCommitSha(event: H3Event): string {
