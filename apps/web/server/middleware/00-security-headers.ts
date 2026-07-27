@@ -1,6 +1,10 @@
 /**
  * Security headers middleware.
  * Applies standard security headers to all responses.
+ *
+ * Numeric filename prefix: nitro runs middleware in alphabetical order, and
+ * this has to precede rate limiting — otherwise a 429/503 thrown there short
+ * circuits the chain and the error response ships without these headers.
  */
 
 // Allow what the app actually needs:

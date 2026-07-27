@@ -1,6 +1,8 @@
 /**
  * Global rate limiting middleware.
  * Applies appropriate rate limits based on the endpoint being accessed.
+ *
+ * Runs after 00-security-headers so its 429/503 responses keep those headers.
  */
 export default defineEventHandler(async (event) => {
   const path = event.path

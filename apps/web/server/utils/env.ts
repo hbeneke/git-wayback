@@ -49,6 +49,24 @@ export function getGitHubToken(): string | null {
   return getEnvConfig().githubToken
 }
 
+/**
+ * True on a real deployment (Vercel production), as opposed to local dev and
+ * preview builds. Guards the checks that must fail loudly rather than degrade.
+ */
+export function isProduction(): boolean {
+  return process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
+}
+
+/** Whether the Upstash credentials needed for rate limiting are present. */
+export function isRateLimitConfigured(): boolean {
+  try {
+    const config = getEnvConfig()
+    return Boolean(config.upstashRedisRestUrl && config.upstashRedisRestToken)
+  } catch {
+    return false
+  }
+}
+
 export function isConfigValid(): boolean {
   try {
     getEnvConfig()

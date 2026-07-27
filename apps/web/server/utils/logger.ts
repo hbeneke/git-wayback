@@ -9,4 +9,5 @@ export function createLogger(scope: string): ConsolaInstance {
 // Only the scopes actually consumed are wired; add more when needed.
 export const logger = {
   evolution: createLogger('evolution'),
+  rateLimit: createLogger('rate-limit'),
 }

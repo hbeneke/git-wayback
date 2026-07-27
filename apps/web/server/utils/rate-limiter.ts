@@ -6,6 +6,11 @@ export interface RateLimitConfig {
   maxRequests: number
   windowSec: number
   prefix: string
+  /**
+   * Let requests through when the limiter is unavailable instead of failing
+   * closed. Only for endpoints whose whole job is reporting that outage.
+   */
+  failOpen?: boolean
 }
 
 export const RATE_LIMITS = {
@@ -33,20 +38,26 @@ export const RATE_LIMITS = {
     windowSec: 60,
     prefix: 'visits',
   },
-  /** Health checks (lenient) */
+  /** Health checks (lenient, and must answer even when the limiter is down) */
   health: {
     maxRequests: 300,
     windowSec: 60,
     prefix: 'health',
+    failOpen: true,
   },
 } as const
 
-// null when Upstash isn't configured → callers skip rate limiting
+// null when Upstash isn't configured. In development that means "no limiting";
+// in production it is a deploy misconfiguration and applyRateLimit fails closed.
 function createUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
   const url = getEnvConfig().upstashRedisRestUrl
   const token = getEnvConfig().upstashRedisRestToken
 
   if (!url || !token) {
+    // Logged once per prefix — getLimiter caches the null.
+    logger.rateLimit[isProduction() ? 'error' : 'debug'](
+      `Upstash not configured — "${config.prefix}" limiter unavailable`
+    )
     return null
   }
 
@@ -66,6 +77,19 @@ function getLimiter(config: RateLimitConfig): Ratelimit | null {
   return limiterCache.get(config.prefix)!
 }
 
+/**
+ * Raised when the limiter cannot answer. Kept as 503 rather than letting the
+ * request through: an unavailable limiter is indistinguishable from one being
+ * drained by an attacker, and this endpoint set is cheap to abuse.
+ */
+function unavailable(): never {
+  throw createError({
+    statusCode: 503,
+    statusMessage: 'Service Unavailable',
+    message: 'Rate limiting is unavailable. Please try again later.',
+  })
+}
+
 export async function applyRateLimit(
   event: H3Event,
   config: RateLimitConfig = RATE_LIMITS.api
@@ -73,12 +97,25 @@ export async function applyRateLimit(
   const limiter = getLimiter(config)
 
   if (!limiter) {
-    // Upstash not configured — skip rate limiting (dev mode)
+    // Dev keeps working without Upstash; production must not silently drop the
+    // only protection the write and GitHub-backed endpoints have.
+    if (isProduction() && !config.failOpen) unavailable()
     return
   }
 
   const ip = getTrustedClientIp(event)
-  const { success, remaining, reset } = await limiter.limit(ip)
+
+  let success: boolean
+  let remaining: number
+  let reset: number
+
+  try {
+    ;({ success, remaining, reset } = await limiter.limit(ip))
+  } catch (err) {
+    logger.rateLimit.error(`Limiter "${config.prefix}" failed for ${ip}`, err)
+    if (isProduction() && !config.failOpen) unavailable()
+    return
+  }
 
   setHeaders(event, {
     'X-RateLimit-Limit': String(config.maxRequests),
