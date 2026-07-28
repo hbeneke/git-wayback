@@ -81,15 +81,21 @@ export default defineNuxtConfig({
   // SSR for SEO, but hydrate for SPA behavior
   ssr: true,
 
-  // Prerender static pages for better SEO
+  // The home page shows live rankings, so it cannot be prerendered: the
+  // payload would be baked at build time and never refresh. Stale-while-
+  // revalidate keeps the static-like response without freezing the data.
   routeRules: {
-    '/': { prerender: true },
+    '/': { swr: 300 },
+    '/rankings/**': { swr: 300 },
   },
 
   // Nitro optimizations
   nitro: {
     prerender: {
-      crawlLinks: true,
+      // Crawling from the home page followed the ranking links and prerendered
+      // arbitrary /{owner}/{repo} routes — build-time GitHub calls for pages
+      // that are then served stale.
+      crawlLinks: false,
     },
     compressPublicAssets: true,
   },
