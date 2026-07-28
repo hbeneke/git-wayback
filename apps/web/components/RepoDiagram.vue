@@ -264,7 +264,11 @@
                 </svg>
               </button>
             </div>
-            <div v-if="filesPanelOpen && fileTreeRoot" class="mt-1.5 overflow-y-auto overflow-x-hidden">
+            <div
+              v-if="filesPanelOpen && fileTreeRoot"
+              ref="filesPanelRef"
+              class="mt-1.5 overflow-y-auto overflow-x-hidden"
+            >
               <FileTreePanel
                 :nodes="fileTreeRoot.children"
                 :open-set="openFolders"
@@ -414,6 +418,7 @@ const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split
 const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
 const totalSnapshots = computed(() => snapshots.value.length)
 
+const filesPanelRef = ref<HTMLElement | null>(null)
 const filesPanelOpen = ref(true)
 const legendPanelOpen = ref(true)
 const openFolders = ref<Set<string>>(new Set())
@@ -463,7 +468,9 @@ async function onGraphNodeClick(path: string) {
   openFolders.value = next
 
   await nextTick()
-  const row = document.querySelector(`.files-overlay [data-path="${cssEscape(path)}"]`)
+  // Scoped to the panel's own element. This used to query `.files-overlay`,
+  // a class that exists nowhere in the app, so the row never scrolled.
+  const row = filesPanelRef.value?.querySelector(`[data-path="${cssEscape(path)}"]`)
   row?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 

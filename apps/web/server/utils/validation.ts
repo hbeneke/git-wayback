@@ -1,4 +1,3 @@
-import { DISPLAY } from '@git-wayback/shared'
 import type { H3Event } from 'h3'
 
 // 1-39 chars, alphanumeric or hyphens, no leading/trailing/consecutive hyphen
@@ -84,33 +83,6 @@ export function parseRepoFullName(input: unknown): RepoParams {
   return parsed
 }
 
-export function validateSearchQuery(query: unknown): string {
-  if (!query || typeof query !== 'string') {
-    throw createError({
-      statusCode: 400,
-      message: 'Search query is required',
-    })
-  }
-
-  const trimmed = query.trim()
-
-  if (trimmed.length < 2) {
-    throw createError({
-      statusCode: 400,
-      message: 'Search query must be at least 2 characters',
-    })
-  }
-
-  if (trimmed.length > DISPLAY.MAX_SEARCH_LENGTH) {
-    throw createError({
-      statusCode: 400,
-      message: `Search query must not exceed ${DISPLAY.MAX_SEARCH_LENGTH} characters`,
-    })
-  }
-
-  return trimmed
-}
-
 // git check-ref-format rules: no traversal, control chars, or forbidden tokens
 export function isValidGitRef(ref: string): boolean {
   if (!ref) {
@@ -141,29 +113,4 @@ export function isValidGitRef(ref: string): boolean {
     return false
   }
   return true
-}
-
-export function isValidCommitSha(sha: string): boolean {
-  return typeof sha === 'string' && /^[a-f0-9]{7,40}$/i.test(sha)
-}
-
-export function validateCommitSha(event: H3Event): string {
-  const query = getQuery(event)
-  const sha = query.sha as string
-
-  if (!sha) {
-    throw createError({
-      statusCode: 400,
-      message: 'sha query parameter is required',
-    })
-  }
-
-  if (!isValidCommitSha(sha)) {
-    throw createError({
-      statusCode: 400,
-      message: `Invalid commit SHA: "${sha}". Must be 7-40 hexadecimal characters.`,
-    })
-  }
-
-  return sha
 }

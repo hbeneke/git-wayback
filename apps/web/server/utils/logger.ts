@@ -10,4 +10,5 @@ export function createLogger(scope: string): ConsolaInstance {
 export const logger = {
   evolution: createLogger('evolution'),
   rateLimit: createLogger('rate-limit'),
+  visits: createLogger('visits'),
 }

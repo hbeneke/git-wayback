@@ -12,12 +12,17 @@
 //   (Could be tightened with nonces; deferred.)
 // - GitHub avatars served from avatars.githubusercontent.com.
 // - D3 + Tailwind inline styles → style-src 'unsafe-inline'.
+// - main.css pulls JetBrains Mono from Google Fonts, which needs the stylesheet
+//   host in style-src and the font host in font-src. Without both the @import
+//   was blocked and the whole site silently fell back to a system mono.
+//   Self-hosting the font would drop these two exceptions and the third-party
+//   request with them.
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https://avatars.githubusercontent.com https://github.com",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",

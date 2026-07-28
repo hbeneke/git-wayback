@@ -4,6 +4,7 @@ interface EnvConfig {
   upstashRedisRestUrl: string | null
   upstashRedisRestToken: string | null
   cronSecret: string | null
+  visitorSalt: string | null
 }
 
 let cachedConfig: EnvConfig | null = null
@@ -37,6 +38,7 @@ export function getEnvConfig(): EnvConfig {
     upstashRedisRestUrl: optionalEnv('UPSTASH_REDIS_REST_URL'),
     upstashRedisRestToken: optionalEnv('UPSTASH_REDIS_REST_TOKEN'),
     cronSecret: optionalEnv('CRON_SECRET'),
+    visitorSalt: optionalEnv('VISITOR_ID_SALT'),
   }
 
   return cachedConfig
@@ -45,6 +47,23 @@ export function getEnvConfig(): EnvConfig {
 // null when unset → the maintenance endpoints refuse every caller
 export function getCronSecret(): string | null {
   return getEnvConfig().cronSecret
+}
+
+/**
+ * Salt for the visitor identifier hash. Without it the hash is enumerable —
+ * IPv4 is only 2^32 values — so production is expected to set one.
+ */
+export function getVisitorSalt(): string {
+  const salt = getEnvConfig().visitorSalt
+
+  if (!salt) {
+    if (isProduction()) {
+      logger.visits.error('VISITOR_ID_SALT is unset — visitor hashes are enumerable')
+    }
+    return 'git-wayback-unsalted'
+  }
+
+  return salt
 }
 
 export function getDatabaseUrl(): string {

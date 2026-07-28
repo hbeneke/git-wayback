@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isValidCommitSha,
   isValidGitHubOwner,
   isValidGitHubRepo,
   isValidGitRef,
@@ -47,21 +46,6 @@ describe('isValidGitHubRepo', () => {
     expect(isValidGitHubRepo('.hidden')).toBe(false)
     expect(isValidGitHubRepo('owner/repo')).toBe(false)
     expect(isValidGitHubRepo('a'.repeat(101))).toBe(false)
-  })
-})
-
-describe('isValidCommitSha', () => {
-  it('accepts short (7) and full (40) hex SHAs', () => {
-    expect(isValidCommitSha('abc1234')).toBe(true)
-    expect(isValidCommitSha('a'.repeat(40))).toBe(true)
-    expect(isValidCommitSha('ABCDEF1')).toBe(true)
-  })
-
-  it('rejects non-hex, too short, and too long', () => {
-    expect(isValidCommitSha('zzzzzzz')).toBe(false)
-    expect(isValidCommitSha('abc')).toBe(false)
-    expect(isValidCommitSha('a'.repeat(41))).toBe(false)
-    expect(isValidCommitSha('')).toBe(false)
   })
 })
 

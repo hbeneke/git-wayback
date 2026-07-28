@@ -12,8 +12,8 @@ export default defineEventHandler(async (event) => {
   // <img src> on the home page for every visitor.
   const repoAvatar = `https://github.com/${owner}.png`
 
-  // Visitor identifier = platform-trusted client IP. Raw x-forwarded-for is
-  // NOT used here because it is client-controlled (see getTrustedClientIp).
+  // Derived from the platform-trusted client IP. Raw x-forwarded-for is NOT
+  // used because it is client-controlled (see getTrustedClientIp).
   const visitorIp = getTrustedClientIp(event)
 
   // UTC day bucket — dedup is per visitor+repo+day (see schema unique).
@@ -24,7 +24,8 @@ export default defineEventHandler(async (event) => {
   await db
     .insert(repoVisits)
     .values({
-      visitorId: visitorIp,
+      // Hashed: dedup needs a stable per-day identifier, not the address.
+      visitorId: toVisitorId(visitorIp, visitDay),
       repoFullName,
       repoAvatar,
       visitDay,
