@@ -7,6 +7,19 @@ export const MS_PER_DAY = MS_PER_HOUR * 24
 /** Cache duration for evolution snapshots (24 hours) */
 export const EVOLUTION_CACHE_DURATION_MS = MS_PER_DAY
 
+/**
+ * Rows untouched for this long are deleted by the purge job. Without it the
+ * table only ever grows: expiry refreshes a row, it never removes one.
+ */
+export const EVOLUTION_CACHE_RETENTION_MS = MS_PER_DAY * 7
+
+/**
+ * Upper bound on a single cached snapshot blob. A monorepo with a deep tree
+ * can serialize to tens of MB; past this the result is still served, just not
+ * stored.
+ */
+export const EVOLUTION_MAX_CACHE_BYTES = 4 * 1024 * 1024
+
 /** Debounce delay for search input (ms) */
 export const SEARCH_DEBOUNCE_MS = 300
 

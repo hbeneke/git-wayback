@@ -3,6 +3,7 @@ interface EnvConfig {
   githubToken: string | null
   upstashRedisRestUrl: string | null
   upstashRedisRestToken: string | null
+  cronSecret: string | null
 }
 
 let cachedConfig: EnvConfig | null = null
@@ -35,9 +36,15 @@ export function getEnvConfig(): EnvConfig {
     githubToken: optionalEnv('GITHUB_TOKEN'),
     upstashRedisRestUrl: optionalEnv('UPSTASH_REDIS_REST_URL'),
     upstashRedisRestToken: optionalEnv('UPSTASH_REDIS_REST_TOKEN'),
+    cronSecret: optionalEnv('CRON_SECRET'),
   }
 
   return cachedConfig
+}
+
+// null when unset → the maintenance endpoints refuse every caller
+export function getCronSecret(): string | null {
+  return getEnvConfig().cronSecret
 }
 
 export function getDatabaseUrl(): string {

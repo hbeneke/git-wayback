@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
 import {
   EVOLUTION_CACHE_DURATION_MS,
+  EVOLUTION_MAX_CACHE_BYTES,
   EVOLUTION,
   GITHUB_API,
   type EvolutionSource,
@@ -180,10 +181,13 @@ export default defineEventHandler(async (event) => {
     ? (query.sampling as EvolutionSampling)
     : EVOLUTION.DEFAULT_SAMPLING
 
-  const limit = Math.min(
-    Math.max(Number(query.limit) || EVOLUTION.DEFAULT_LIMIT, 1),
-    EVOLUTION.MAX_LIMIT
-  )
+  // Snapped to the offered options rather than clamped to a range: `limit` is
+  // part of the cache key, so accepting every value in 1..MAX_LIMIT meant 30
+  // distinct rows per repo/source/branch/sampling combination.
+  const requestedLimit = Number(query.limit)
+  const limit = (EVOLUTION.LIMIT_OPTIONS as readonly number[]).includes(requestedLimit)
+    ? requestedLimit
+    : EVOLUTION.DEFAULT_LIMIT
 
   const db = createDb(getDatabaseUrl())
 
@@ -251,7 +255,13 @@ export default defineEventHandler(async (event) => {
   const pool = await fetchFromGitHub(owner, repo, source, branch, limit, sampling)
 
   // 3. Cache the result (best-effort — a DB outage must not fail the request)
-  if (pool.length > 0) {
+  const cacheBytes = pool.length > 0 ? Buffer.byteLength(JSON.stringify(pool)) : 0
+
+  if (pool.length > 0 && cacheBytes > EVOLUTION_MAX_CACHE_BYTES) {
+    logger.evolution.warn(
+      `Skipping cache write for ${cacheKey}: ${Math.round(cacheBytes / 1024 / 1024)}MB exceeds the blob cap`
+    )
+  } else if (pool.length > 0) {
     const now = new Date()
 
     try {
