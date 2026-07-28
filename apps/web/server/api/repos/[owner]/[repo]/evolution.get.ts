@@ -1,13 +1,13 @@
-import { eq } from 'drizzle-orm'
-import { createDb, evolutionSnapshots, type EvolutionSnapshotData } from '@git-wayback/db'
+import { createDb, type EvolutionSnapshotData, evolutionSnapshots } from '@git-wayback/db'
 import {
+  EVOLUTION,
   EVOLUTION_CACHE_DURATION_MS,
   EVOLUTION_MAX_CACHE_BYTES,
-  EVOLUTION,
-  GITHUB_API,
-  type EvolutionSource,
   type EvolutionSampling,
+  type EvolutionSource,
+  GITHUB_API,
 } from '@git-wayback/shared'
+import { eq } from 'drizzle-orm'
 
 /**
  * One unit to materialize into a snapshot: a ref label, its commit sha, and an
@@ -36,7 +36,7 @@ async function fetchTagSeeds(owner: string, repo: string): Promise<SnapshotSeed[
 async function fetchCommitSeeds(
   owner: string,
   repo: string,
-  branch: string
+  branch: string,
 ): Promise<SnapshotSeed[]> {
   const commits = await github.listCommits(owner, repo, {
     sha: branch,
@@ -64,7 +64,7 @@ async function fetchFromGitHub(
   source: EvolutionSource,
   branch: string,
   limit: number,
-  sampling: EvolutionSampling
+  sampling: EvolutionSampling,
 ): Promise<EvolutionSnapshotData[]> {
   // 1. Resolve the cheap seed pool (one list call, no trees)
   const pool =
@@ -93,20 +93,14 @@ async function fetchFromGitHub(
             // Commits already carry their date; tags need a commit lookup
             seed.date
               ? Promise.resolve(seed.date)
-              : github
-                  .getCommit(owner, repo, seed.sha)
-                  .then((c) => c.commit.author.date),
+              : github.getCommit(owner, repo, seed.sha).then((c) => c.commit.author.date),
             // Only tags can be annotated; skip the extra call for commits
             source === 'tags'
               ? github
                   .getTagRef(owner, repo, seed.label)
                   .then(async (ref) => {
                     if (ref.object.type === 'tag') {
-                      const annotated = await github.getAnnotatedTag(
-                        owner,
-                        repo,
-                        ref.object.sha
-                      )
+                      const annotated = await github.getAnnotatedTag(owner, repo, ref.object.sha)
                       return annotated.message?.trim() || null
                     }
                     return null
@@ -151,7 +145,7 @@ async function fetchFromGitHub(
           logger.evolution.warn(`Failed to fetch data for ${source} ${seed.label}`, err)
           return null
         }
-      })
+      }),
     )
 
     for (const result of batchResults) {
@@ -169,14 +163,12 @@ export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
 
-  const source: EvolutionSource = EVOLUTION.SOURCES.includes(
-    query.source as EvolutionSource
-  )
+  const source: EvolutionSource = EVOLUTION.SOURCES.includes(query.source as EvolutionSource)
     ? (query.source as EvolutionSource)
     : EVOLUTION.DEFAULT_SOURCE
 
   const sampling: EvolutionSampling = EVOLUTION.SAMPLING.includes(
-    query.sampling as EvolutionSampling
+    query.sampling as EvolutionSampling,
   )
     ? (query.sampling as EvolutionSampling)
     : EVOLUTION.DEFAULT_SAMPLING
@@ -259,7 +251,7 @@ export default defineEventHandler(async (event) => {
 
   if (pool.length > 0 && cacheBytes > EVOLUTION_MAX_CACHE_BYTES) {
     logger.evolution.warn(
-      `Skipping cache write for ${cacheKey}: ${Math.round(cacheBytes / 1024 / 1024)}MB exceeds the blob cap`
+      `Skipping cache write for ${cacheKey}: ${Math.round(cacheBytes / 1024 / 1024)}MB exceeds the blob cap`,
     )
   } else if (pool.length > 0) {
     const now = new Date()

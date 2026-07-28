@@ -1,4 +1,4 @@
-import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
+import { DISPLAY, GITHUB_API } from '@git-wayback/shared'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)

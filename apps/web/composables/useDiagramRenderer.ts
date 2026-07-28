@@ -1,18 +1,15 @@
+import { D3_EXIT_TRANSITION_DURATION_MS, DIAGRAM } from '@git-wayback/shared'
 import * as d3 from 'd3'
-import {
-  DIAGRAM,
-  D3_EXIT_TRANSITION_DURATION_MS,
-} from '@git-wayback/shared'
-import type { TreeNode, TagSnapshot } from './useDiagramTree'
+import type { TagSnapshot, TreeNode } from './useDiagramTree'
 import {
   buildTree,
   collapseTree,
-  RENDER_FILE_BUDGET,
-  getExtensionColor,
-  getNodeColor,
-  getFileKind,
   darken,
   EXTENSION_COLORS,
+  getExtensionColor,
+  getFileKind,
+  getNodeColor,
+  RENDER_FILE_BUDGET,
 } from './useDiagramTree'
 
 const HOVER_TRANSITION_MS = 300
@@ -117,7 +114,7 @@ export function useDiagramRenderer(
     if (!wrapper) return
     const rect = wrapper.getBoundingClientRect()
     const parts = data.path.split('/')
-    const dir = parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : ''
+    const dir = parts.length > 1 ? `${parts.slice(0, -1).join('/')}/` : ''
     tooltip.value = {
       visible: true,
       x: event.clientX - rect.left + 12,
@@ -132,9 +129,11 @@ export function useDiagramRenderer(
     linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
     data: TreeNode,
   ) {
-    linksGroup.selectAll<SVGPathElement, SimLink>('path')
+    linksGroup
+      .selectAll<SVGPathElement, SimLink>('path')
       .filter((d) => d.target.key === (data.path || data.name))
-      .transition().duration(HOVER_TRANSITION_MS)
+      .transition()
+      .duration(HOVER_TRANSITION_MS)
       .attr('stroke', getNodeColor(data))
       .attr('stroke-opacity', 1)
       .attr('stroke-width', 1.5)
@@ -144,9 +143,11 @@ export function useDiagramRenderer(
     linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
     data: TreeNode,
   ) {
-    linksGroup.selectAll<SVGPathElement, SimLink>('path')
+    linksGroup
+      .selectAll<SVGPathElement, SimLink>('path')
       .filter((d) => d.target.key === (data.path || data.name))
-      .transition().duration(HOVER_TRANSITION_MS)
+      .transition()
+      .duration(HOVER_TRANSITION_MS)
       .attr('stroke', getNodeColor(data))
       .attr('stroke-opacity', LINK_BASE_OPACITY)
       .attr('stroke-width', 1)
@@ -156,10 +157,12 @@ export function useDiagramRenderer(
     nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
     data: TreeNode,
   ) {
-    nodesGroup.selectAll<SVGGElement, SimNode>('g')
+    nodesGroup
+      .selectAll<SVGGElement, SimNode>('g')
       .filter((d) => d.key === (data.path || data.name))
       .select<SVGCircleElement>('circle.main')
-      .transition().duration(HOVER_TRANSITION_MS)
+      .transition()
+      .duration(HOVER_TRANSITION_MS)
       .attr('r', function () {
         const d = d3.select(this).datum() as SimNode
         return d.r * HOVER_SCALE
@@ -170,10 +173,12 @@ export function useDiagramRenderer(
     nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
     data: TreeNode,
   ) {
-    nodesGroup.selectAll<SVGGElement, SimNode>('g')
+    nodesGroup
+      .selectAll<SVGGElement, SimNode>('g')
       .filter((d) => d.key === (data.path || data.name))
       .select<SVGCircleElement>('circle.main')
-      .transition().duration(HOVER_TRANSITION_MS)
+      .transition()
+      .duration(HOVER_TRANSITION_MS)
       .attr('r', function () {
         const d = d3.select(this).datum() as SimNode
         return d.r
@@ -270,17 +275,26 @@ export function useDiagramRenderer(
   function ensureSimulation() {
     if (simulation) return simulation
 
-    simulation = d3.forceSimulation<SimNode, SimLink>()
-      .force('link', d3.forceLink<SimNode, SimLink>()
-        .id((d) => d.key)
-        .distance(linkDistance)
-        .strength(0.7))
-      .force('charge', d3.forceManyBody<SimNode>()
-        .strength(-38)
-        // Bounding the range keeps the Barnes-Hut pass cheap on big graphs;
-        // distant nodes barely influence each other anyway.
-        .distanceMax(420)
-        .theta(0.9))
+    simulation = d3
+      .forceSimulation<SimNode, SimLink>()
+      .force(
+        'link',
+        d3
+          .forceLink<SimNode, SimLink>()
+          .id((d) => d.key)
+          .distance(linkDistance)
+          .strength(0.7),
+      )
+      .force(
+        'charge',
+        d3
+          .forceManyBody<SimNode>()
+          .strength(-38)
+          // Bounding the range keeps the Barnes-Hut pass cheap on big graphs;
+          // distant nodes barely influence each other anyway.
+          .distanceMax(420)
+          .theta(0.9),
+      )
       .force('collide', d3.forceCollide<SimNode>((d) => d.r + 1.5).iterations(1))
       .force('x', d3.forceX<SimNode>(() => centerX).strength(0.015))
       .force('y', d3.forceY<SimNode>(() => centerY).strength(0.015))
@@ -311,9 +325,7 @@ export function useDiagramRenderer(
     const animate = nodes.length <= ANIMATE_MAX_NODES
 
     // Links
-    const linkJoin = linksGroup
-      .selectAll<SVGPathElement, SimLink>('path')
-      .data(links, (d) => d.key)
+    const linkJoin = linksGroup.selectAll<SVGPathElement, SimLink>('path').data(links, (d) => d.key)
 
     const linkExit = linkJoin.exit()
     if (animate) {
@@ -322,7 +334,8 @@ export function useDiagramRenderer(
       linkExit.remove()
     }
 
-    const linkEnter = linkJoin.enter()
+    const linkEnter = linkJoin
+      .enter()
       .append('path')
       .attr('fill', 'none')
       .attr('stroke', (d) => getNodeColor(d.target.data))
@@ -337,9 +350,7 @@ export function useDiagramRenderer(
     linkSel = linkEnter.merge(linkJoin)
 
     // Nodes
-    const nodeJoin = nodesGroup
-      .selectAll<SVGGElement, SimNode>('g')
-      .data(nodes, (d) => d.key)
+    const nodeJoin = nodesGroup.selectAll<SVGGElement, SimNode>('g').data(nodes, (d) => d.key)
 
     const nodeExit = nodeJoin.exit()
     if (animate) {
@@ -348,7 +359,8 @@ export function useDiagramRenderer(
       nodeExit.remove()
     }
 
-    const nodeEnter = nodeJoin.enter()
+    const nodeEnter = nodeJoin
+      .enter()
       .append('g')
       .attr('opacity', animate ? 0 : 1)
       .attr('transform', (d) => `translate(${d.x},${d.y})`)
@@ -359,7 +371,8 @@ export function useDiagramRenderer(
 
     // A node is keyed by path, so fill/stroke never change once it exists —
     // set them on enter rather than rewriting every circle on every snapshot.
-    nodeEnter.append('circle')
+    nodeEnter
+      .append('circle')
       .attr('class', 'main')
       .attr('r', (d) => d.r)
       .attr('fill', (d) => {
@@ -374,7 +387,8 @@ export function useDiagramRenderer(
       .attr('stroke-dasharray', (d) => (d.data.type === 'more' ? '2 2' : null))
 
     // Count label, only on the handful of 'more' bubbles.
-    nodeEnter.filter((d) => d.data.type === 'more')
+    nodeEnter
+      .filter((d) => d.data.type === 'more')
       .append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', '0.34em')
@@ -387,7 +401,8 @@ export function useDiagramRenderer(
     nodeSel = nodeEnter.merge(nodeJoin)
 
     // A 'more' bubble grows as its folder gains files, so its radius does move.
-    nodeSel.select<SVGCircleElement>('circle.main')
+    nodeSel
+      .select<SVGCircleElement>('circle.main')
       .filter((d) => d.data.type === 'more')
       .attr('r', (d) => d.r)
     nodeSel.select<SVGTextElement>('text').text((d) => d.data.name)
@@ -423,7 +438,9 @@ export function useDiagramRenderer(
         const sel = linkAt(event)
         if (!sel) return
         const d = sel.datum()
-        sel.transition().duration(HOVER_TRANSITION_MS)
+        sel
+          .transition()
+          .duration(HOVER_TRANSITION_MS)
           .attr('stroke-opacity', 1)
           .attr('stroke-width', 1.5)
         highlightNodeCircle(nodesGroup, d.target.data)
@@ -439,7 +456,9 @@ export function useDiagramRenderer(
         const sel = linkAt(event)
         if (!sel) return
         const d = sel.datum()
-        sel.transition().duration(HOVER_TRANSITION_MS)
+        sel
+          .transition()
+          .duration(HOVER_TRANSITION_MS)
           .attr('stroke-opacity', LINK_BASE_OPACITY)
           .attr('stroke-width', 1)
         unhighlightNodeCircle(nodesGroup, d.target.data)
@@ -452,7 +471,10 @@ export function useDiagramRenderer(
         const sel = circleAt(event)
         if (!sel) return
         const d = sel.datum()
-        sel.transition().duration(HOVER_TRANSITION_MS).attr('r', d.r * HOVER_SCALE)
+        sel
+          .transition()
+          .duration(HOVER_TRANSITION_MS)
+          .attr('r', d.r * HOVER_SCALE)
         highlightParentLink(linksGroup, d.data)
         showTooltip(event, d.data)
         hoveredGraphPath.value = d.key
@@ -516,7 +538,8 @@ export function useDiagramRenderer(
 
     const g = svg.append('g')
 
-    zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+    zoomBehavior = d3
+      .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 10])
       .on('zoom', (event) => {
         g.attr('transform', event.transform)
@@ -560,10 +583,7 @@ export function useDiagramRenderer(
     centerY = height / 2
 
     // Keep the svg viewport in sync with the container (resize / expand toggle).
-    svg
-      .attr('width', width)
-      .attr('height', height)
-      .attr('viewBox', [0, 0, width, height].join(' '))
+    svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height].join(' '))
 
     renderGraph(linksGroup, nodesGroup)
   }
@@ -584,11 +604,14 @@ export function useDiagramRenderer(
     if (!groups) return
     const { linksGroup, nodesGroup } = groups
 
-    nodesGroup.selectAll<SVGGElement, SimNode>('g')
+    nodesGroup
+      .selectAll<SVGGElement, SimNode>('g')
       .filter((d) => d.key === path)
       .each(function (d) {
-        d3.select(this).select<SVGCircleElement>('circle.main')
-          .transition().duration(HOVER_TRANSITION_MS)
+        d3.select(this)
+          .select<SVGCircleElement>('circle.main')
+          .transition()
+          .duration(HOVER_TRANSITION_MS)
           .attr('r', d.r * HOVER_SCALE)
         highlightParentLink(linksGroup, d.data)
       })
@@ -599,11 +622,14 @@ export function useDiagramRenderer(
     if (!groups) return
     const { linksGroup, nodesGroup } = groups
 
-    nodesGroup.selectAll<SVGGElement, SimNode>('g')
+    nodesGroup
+      .selectAll<SVGGElement, SimNode>('g')
       .filter((d) => d.key === path)
       .each(function (d) {
-        d3.select(this).select<SVGCircleElement>('circle.main')
-          .transition().duration(HOVER_TRANSITION_MS)
+        d3.select(this)
+          .select<SVGCircleElement>('circle.main')
+          .transition()
+          .duration(HOVER_TRANSITION_MS)
           .attr('r', d.r)
         unhighlightParentLink(linksGroup, d.data)
       })
@@ -621,7 +647,8 @@ export function useDiagramRenderer(
     const tx = width / 2 - target.x * scale
     const ty = height / 2 - target.y * scale
 
-    svgRoot.transition()
+    svgRoot
+      .transition()
       .duration(700)
       .ease(d3.easeCubicInOut)
       .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))

@@ -1,6 +1,6 @@
-import { lt } from 'drizzle-orm'
 import { createDb, evolutionSnapshots } from '@git-wayback/db'
 import { EVOLUTION_CACHE_RETENTION_MS } from '@git-wayback/shared'
+import { lt } from 'drizzle-orm'
 
 /**
  * Deletes evolution cache rows nobody has asked for in a while.

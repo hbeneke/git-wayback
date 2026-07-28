@@ -91,4 +91,3 @@ export function formatSize(sizeInKb: number): string {
 export function formatUrl(url: string): string {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
-

@@ -158,13 +158,16 @@ function mapGitHubError(err: unknown): never {
  */
 export async function ghFetch<T>(
   path: string,
-  query?: Record<string, string | number>
+  query?: Record<string, string | number>,
 ): Promise<T> {
   try {
-    return await $fetch<T>(`${API_BASE}${path}`, {
+    // $fetch resolves to TypedInternalResponse<...>, which the compiler cannot
+    // prove equals T for an unresolved generic. These are external URLs with
+    // no route typing to infer from, so T is the only source of truth.
+    return (await $fetch<T>(`${API_BASE}${path}`, {
       headers: buildHeaders(),
       query,
-    })
+    })) as T
   } catch (err) {
     mapGitHubError(err)
   }
@@ -173,8 +176,7 @@ export async function ghFetch<T>(
 // Typed endpoint helpers
 
 export const github = {
-  getRepo: (owner: string, repo: string) =>
-    ghFetch<GhRepo>(`/repos/${owner}/${repo}`),
+  getRepo: (owner: string, repo: string) => ghFetch<GhRepo>(`/repos/${owner}/${repo}`),
 
   getLanguages: (owner: string, repo: string) =>
     ghFetch<GhLanguages>(`/repos/${owner}/${repo}/languages`),
@@ -184,11 +186,7 @@ export const github = {
       per_page: perPage,
     }),
 
-  listCommits: (
-    owner: string,
-    repo: string,
-    opts: { perPage?: number; sha?: string } = {}
-  ) =>
+  listCommits: (owner: string, repo: string, opts: { perPage?: number; sha?: string } = {}) =>
     ghFetch<GhCommitListItem[]>(`/repos/${owner}/${repo}/commits`, {
       ...(opts.perPage ? { per_page: opts.perPage } : {}),
       ...(opts.sha ? { sha: opts.sha } : {}),

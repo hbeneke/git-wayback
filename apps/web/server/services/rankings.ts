@@ -1,6 +1,6 @@
-import { sql } from 'drizzle-orm'
 import { createDb, repoVisits } from '@git-wayback/db'
 import { MS_PER_DAY } from '@git-wayback/shared'
+import { sql } from 'drizzle-orm'
 
 export const RANKING_PERIODS = ['popular', 'month', 'week'] as const
 export type RankingPeriod = (typeof RANKING_PERIODS)[number]
@@ -42,7 +42,7 @@ function dayString(date: Date): string {
  */
 export async function getRanking(
   period: RankingPeriod,
-  { limit = RANKING_DEFAULT_LIMIT, offset = 0 }: RankingOptions = {}
+  { limit = RANKING_DEFAULT_LIMIT, offset = 0 }: RankingOptions = {},
 ): Promise<RankedRepo[]> {
   const db = createDb(getDatabaseUrl())
   const windowDays = PERIOD_WINDOW_DAYS[period]
@@ -56,7 +56,9 @@ export async function getRanking(
     .from(repoVisits)
 
   const filtered = windowDays
-    ? query.where(sql`${repoVisits.visitDay} >= ${dayString(new Date(Date.now() - windowDays * MS_PER_DAY))}`)
+    ? query.where(
+        sql`${repoVisits.visitDay} >= ${dayString(new Date(Date.now() - windowDays * MS_PER_DAY))}`,
+      )
     : query
 
   return filtered

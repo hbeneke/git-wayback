@@ -1,4 +1,4 @@
-import { consola, type ConsolaInstance } from 'consola'
+import { type ConsolaInstance, consola } from 'consola'
 
 const BASE_TAG = 'git-wayback'
 

@@ -1,5 +1,5 @@
-import type { H3Event } from 'h3'
 import { DISPLAY } from '@git-wayback/shared'
+import type { H3Event } from 'h3'
 
 // 1-39 chars, alphanumeric or hyphens, no leading/trailing/consecutive hyphen
 const GITHUB_OWNER_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/

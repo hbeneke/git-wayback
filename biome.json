@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/*.vue"]
+    "includes": ["**", "!**/*.vue", "!**/*.css", "!**/drizzle"]
   },
   "formatter": {
     "enabled": true,

@@ -1,6 +1,6 @@
-import type { H3Event } from 'h3'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import type { H3Event } from 'h3'
 
 export interface RateLimitConfig {
   maxRequests: number
@@ -56,7 +56,7 @@ function createUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
   if (!url || !token) {
     // Logged once per prefix — getLimiter caches the null.
     logger.rateLimit[isProduction() ? 'error' : 'debug'](
-      `Upstash not configured — "${config.prefix}" limiter unavailable`
+      `Upstash not configured — "${config.prefix}" limiter unavailable`,
     )
     return null
   }
@@ -92,7 +92,7 @@ function unavailable(): never {
 
 export async function applyRateLimit(
   event: H3Event,
-  config: RateLimitConfig = RATE_LIMITS.api
+  config: RateLimitConfig = RATE_LIMITS.api,
 ): Promise<void> {
   const limiter = getLimiter(config)
 

@@ -1,11 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
-  modules: [
-    '@nuxtjs/tailwindcss',
-    '@vercel/analytics/nuxt',
-    '@vercel/speed-insights/nuxt',
-  ],
+  modules: ['@nuxtjs/tailwindcss', '@vercel/analytics/nuxt', '@vercel/speed-insights/nuxt'],
 
   // Treat parley web components as custom elements, not Vue components
   vue: {

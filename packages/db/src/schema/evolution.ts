@@ -1,25 +1,24 @@
-import { index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
+import { integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 
-// Stores the evolution snapshots for each repository
-export const evolutionSnapshots = pgTable(
-  'evolution_snapshots',
-  {
-    id: text('id').primaryKey(), // format: owner/repo
-    owner: text('owner').notNull(),
-    name: text('name').notNull(),
-    // JSON array of all tag snapshots with their file trees
-    snapshots: jsonb('snapshots').notNull().$type<EvolutionSnapshotData[]>(),
-    // When this data was last fetched from GitHub
-    capturedAt: timestamp('captured_at').notNull().defaultNow(),
-    // Number of tags captured
-    tagCount: integer('tag_count').notNull().default(0),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  },
-  (table) => [
-    index('evolution_owner_name_idx').on(table.owner, table.name),
-  ]
-)
+// Caches the evolution snapshots computed for a repository.
+//
+// No secondary index: every read is a primary-key lookup on `id`. The old
+// (owner, name) index was never consulted and only cost writes.
+export const evolutionSnapshots = pgTable('evolution_snapshots', {
+  // Cache key, not just the repo: "owner/repo#source#branch#sampling#limit".
+  // Every input that changes the result set is part of it.
+  id: text('id').primaryKey(),
+  owner: text('owner').notNull(),
+  name: text('name').notNull(),
+  // JSON array of all tag snapshots with their file trees
+  snapshots: jsonb('snapshots').notNull().$type<EvolutionSnapshotData[]>(),
+  // When this data was last fetched from GitHub
+  capturedAt: timestamp('captured_at').notNull().defaultNow(),
+  // Number of tags captured
+  tagCount: integer('tag_count').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
 
 // Type for the snapshot data stored in JSONB
 export interface EvolutionSnapshotData {

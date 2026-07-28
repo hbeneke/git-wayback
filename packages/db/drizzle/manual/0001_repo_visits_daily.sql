@@ -1,6 +1,9 @@
 -- Manual migration — Task 2: per-day visit dedup.
 --
--- WHY MANUAL: drizzle migration history is drifted. Snapshot 0000 predates
+-- SUPERSEDED: folded into the 0000 baseline. Kept as a record of what was
+-- applied by hand; see ../../README.md. Do not run on a new database.
+--
+-- WHY MANUAL (at the time): drizzle migration history was drifted. Snapshot 0000 predates
 -- repo_visits/evolution_snapshots (those were applied via `db:push`), so
 -- `drizzle-kit generate` misdiagnoses repo_visits as a new/renamed table.
 -- This file is the reviewed DDL to apply by hand against Neon (or via the

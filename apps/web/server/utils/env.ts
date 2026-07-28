@@ -14,7 +14,7 @@ function requireEnv(name: string): string {
   if (!value || value.trim() === '') {
     throw new Error(
       `Missing required environment variable: ${name}. ` +
-      `Please set it in your .env file or environment.`
+        `Please set it in your .env file or environment.`,
     )
   }
 

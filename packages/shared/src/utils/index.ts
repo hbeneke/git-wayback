@@ -1,6 +1,6 @@
 export {
-  formatNumber,
   formatDate,
+  formatNumber,
   formatRelativeDate,
   formatSize,
   formatUrl,

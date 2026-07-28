@@ -1,11 +1,11 @@
-import { GITHUB_API, DISPLAY } from '@git-wayback/shared'
+import { DISPLAY, GITHUB_API } from '@git-wayback/shared'
 import {
-  github,
   type GhBranch,
   type GhCommitListItem,
   type GhContributor,
   type GhLanguages,
   type GhRelease,
+  github,
 } from '../utils/github-client'
 
 export interface LanguageShare {

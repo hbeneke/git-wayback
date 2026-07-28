@@ -1,6 +1,9 @@
 -- Manual migration — Task 4: drop abandoned schema.
 --
--- WHY MANUAL: drizzle migration history is drifted (see manual/0001 header).
+-- SUPERSEDED: folded into the 0000 baseline. Kept as a record of what was
+-- applied by hand; see ../../README.md. Do not run on a new database.
+--
+-- WHY MANUAL (at the time): drizzle history was drifted (see manual/0001).
 -- Apply by hand against Neon, or via `db:push`. Do NOT use `drizzle-kit
 -- generate`.
 --

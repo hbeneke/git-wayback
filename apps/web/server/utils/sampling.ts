@@ -9,11 +9,7 @@ import type { EvolutionSampling } from '@git-wayback/shared'
  *
  * Extracted out of the evolution endpoint so it is unit-testable.
  */
-export function sampleSnapshots<T>(
-  items: T[],
-  count: number,
-  strategy: EvolutionSampling
-): T[] {
+export function sampleSnapshots<T>(items: T[], count: number, strategy: EvolutionSampling): T[] {
   if (items.length <= count) return items
   if (count <= 1) return [items[items.length - 1]]
   if (strategy === 'latest') return items.slice(items.length - count)

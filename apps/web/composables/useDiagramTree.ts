@@ -68,13 +68,30 @@ export const EXTENSION_COLORS: Record<string, string> = {
 }
 
 const FILE_KINDS: Record<string, string> = {
-  ts: 'typescript', js: 'javascript', vue: 'vue component',
-  json: 'json', md: 'markdown', css: 'stylesheet', html: 'html',
-  py: 'python', go: 'go', rs: 'rust', yaml: 'yaml config',
-  yml: 'yaml config', sh: 'shell script', tsx: 'typescript jsx',
-  jsx: 'javascript jsx', svg: 'svg image', png: 'image', jpg: 'image',
-  gif: 'image', toml: 'toml config', lock: 'lockfile',
-  gitignore: 'git config', env: 'env config', sql: 'sql',
+  ts: 'typescript',
+  js: 'javascript',
+  vue: 'vue component',
+  json: 'json',
+  md: 'markdown',
+  css: 'stylesheet',
+  html: 'html',
+  py: 'python',
+  go: 'go',
+  rs: 'rust',
+  yaml: 'yaml config',
+  yml: 'yaml config',
+  sh: 'shell script',
+  tsx: 'typescript jsx',
+  jsx: 'javascript jsx',
+  svg: 'svg image',
+  png: 'image',
+  jpg: 'image',
+  gif: 'image',
+  toml: 'toml config',
+  lock: 'lockfile',
+  gitignore: 'git config',
+  env: 'env config',
+  sql: 'sql',
 }
 
 export function buildTree(files: FileNode[], rootName: string): TreeNode {
@@ -199,17 +216,23 @@ export function getFileKind(data: TreeNode): string {
   if (data.type === 'more') return `${data.count} more files — click to expand`
   if (!data.extension) return 'file'
   const ext = data.extension.toLowerCase()
-  return FILE_KINDS[ext] || ext + ' file'
+  return FILE_KINDS[ext] || `${ext} file`
 }
 
 function parseRgb(color: string): [number, number, number] | null {
   if (color.startsWith('#')) {
     const hex = color.slice(1)
-    const n = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex
+    const n =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((c) => c + c)
+            .join('')
+        : hex
     return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)]
   }
   const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-  if (m) return [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])]
+  if (m) return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)]
   return null
 }
 

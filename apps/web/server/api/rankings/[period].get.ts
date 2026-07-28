@@ -1,4 +1,9 @@
-import { getRanking, isRankingPeriod, normalizePaging, RANKING_PERIODS } from '../../services/rankings'
+import {
+  getRanking,
+  isRankingPeriod,
+  normalizePaging,
+  RANKING_PERIODS,
+} from '../../services/rankings'
 
 export default defineEventHandler(async (event) => {
   const period = getRouterParam(event, 'period')

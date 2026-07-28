@@ -1,9 +1,6 @@
 import { TIMELINE_PLAYBACK_INTERVAL_MS } from '@git-wayback/shared'
 
-export function useDiagramPlayback(
-  currentIndex: Ref<number>,
-  totalSnapshots: ComputedRef<number>,
-) {
+export function useDiagramPlayback(currentIndex: Ref<number>, totalSnapshots: ComputedRef<number>) {
   const isPlaying = ref(false)
   let playInterval: ReturnType<typeof setInterval> | null = null
 
