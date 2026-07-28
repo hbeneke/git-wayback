@@ -131,7 +131,14 @@
 
               <!-- Commit Activity -->
               <section>
-                <h2 class="section-title mb-3">Activity</h2>
+                <div class="flex items-baseline gap-2 mb-3">
+                  <h2 class="section-title">Activity</h2>
+                  <!-- Says which commits this covers: it is the fetched page,
+                       not the repository's whole history. -->
+                  <span class="text-[10px] text-[rgb(var(--muted))]">
+                    last {{ data.commitActivity.sampleSize }} commits &middot; UTC
+                  </span>
+                </div>
 
                 <div class="mb-5">
                   <h3 class="text-xs text-[rgb(var(--muted))] mb-2">By day</h3>
@@ -334,7 +341,7 @@ interface RepoData {
   commitActivity: {
     byDayOfWeek: number[]
     byHour: number[]
-    byMonth: Record<string, number>
+    sampleSize: number
   }
 }
 

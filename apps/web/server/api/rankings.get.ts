@@ -1,60 +1,14 @@
-import { sql } from 'drizzle-orm'
-import { createDb, repoVisits } from '@git-wayback/db'
+import { getRanking } from '../services/rankings'
 
-interface RankedRepo {
-  repoFullName: string
-  repoAvatar: string | null
-  visits: number
-}
+/** Home page summary: the top of each period in one round trip. */
+const SUMMARY_LIMIT = 10
 
 export default defineEventHandler(async () => {
-  const db = createDb(getDatabaseUrl())
-
-  const now = new Date()
-  const dayStr = (d: Date) => d.toISOString().slice(0, 10)
-  const oneWeekAgo = dayStr(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
-  const oneMonthAgo = dayStr(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
-
   const [popular, popularMonth, popularWeek] = await Promise.all([
-    db
-      .select({
-        repoFullName: repoVisits.repoFullName,
-        repoAvatar: sql<string | null>`MAX(${repoVisits.repoAvatar})`.as('repo_avatar'),
-        visits: sql<number>`COUNT(*)::int`.as('visits'),
-      })
-      .from(repoVisits)
-      .groupBy(repoVisits.repoFullName)
-      .orderBy(sql`COUNT(*) DESC`)
-      .limit(10),
-
-    db
-      .select({
-        repoFullName: repoVisits.repoFullName,
-        repoAvatar: sql<string | null>`MAX(${repoVisits.repoAvatar})`.as('repo_avatar'),
-        visits: sql<number>`COUNT(*)::int`.as('visits'),
-      })
-      .from(repoVisits)
-      .where(sql`${repoVisits.visitDay} >= ${oneMonthAgo}`)
-      .groupBy(repoVisits.repoFullName)
-      .orderBy(sql`COUNT(*) DESC`)
-      .limit(10),
-
-    db
-      .select({
-        repoFullName: repoVisits.repoFullName,
-        repoAvatar: sql<string | null>`MAX(${repoVisits.repoAvatar})`.as('repo_avatar'),
-        visits: sql<number>`COUNT(*)::int`.as('visits'),
-      })
-      .from(repoVisits)
-      .where(sql`${repoVisits.visitDay} >= ${oneWeekAgo}`)
-      .groupBy(repoVisits.repoFullName)
-      .orderBy(sql`COUNT(*) DESC`)
-      .limit(10),
+    getRanking('popular', { limit: SUMMARY_LIMIT }),
+    getRanking('month', { limit: SUMMARY_LIMIT }),
+    getRanking('week', { limit: SUMMARY_LIMIT }),
   ])
 
-  return {
-    popular: popular as RankedRepo[],
-    popularMonth: popularMonth as RankedRepo[],
-    popularWeek: popularWeek as RankedRepo[],
-  }
+  return { popular, popularMonth, popularWeek }
 })

@@ -1,44 +1,17 @@
-import { sql } from 'drizzle-orm'
-import { createDb, repoVisits } from '@git-wayback/db'
+import { getRanking, isRankingPeriod, normalizePaging, RANKING_PERIODS } from '../../services/rankings'
 
 export default defineEventHandler(async (event) => {
   const period = getRouterParam(event, 'period')
-  const query = getQuery(event)
-  // Clamp both bounds — a negative offset would make Postgres throw.
-  const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 100)
-  const offset = Math.max(Number(query.offset) || 0, 0)
 
-  const db = createDb(getDatabaseUrl())
-
-  const now = new Date()
-  const dayStr = (d: Date) => d.toISOString().slice(0, 10)
-  let dayFilter: string | undefined
-
-  if (period === 'week') {
-    dayFilter = dayStr(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
-  } else if (period === 'month') {
-    dayFilter = dayStr(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
-  } else if (period !== 'popular') {
-    throw createError({ statusCode: 400, message: 'Invalid period. Use: popular, month, week' })
+  if (!isRankingPeriod(period)) {
+    throw createError({
+      statusCode: 400,
+      message: `Invalid period. Use: ${RANKING_PERIODS.join(', ')}`,
+    })
   }
 
-  const baseQuery = db
-    .select({
-      repoFullName: repoVisits.repoFullName,
-      repoAvatar: sql<string | null>`MAX(${repoVisits.repoAvatar})`.as('repo_avatar'),
-      visits: sql<number>`COUNT(*)::int`.as('visits'),
-    })
-    .from(repoVisits)
+  const query = getQuery(event)
+  const paging = normalizePaging(query.limit, query.offset)
 
-  const filtered = dayFilter
-    ? baseQuery.where(sql`${repoVisits.visitDay} >= ${dayFilter}`)
-    : baseQuery
-
-  const results = await filtered
-    .groupBy(repoVisits.repoFullName)
-    .orderBy(sql`COUNT(*) DESC`)
-    .limit(limit)
-    .offset(offset)
-
-  return results
+  return getRanking(period, paging)
 })
