@@ -299,9 +299,9 @@ const repo = computed(() => route.params.repo as string)
 
 const activeTab = ref<'details' | 'evolution' | 'screenshots'>('details')
 const tabs = [
-  { id: 'details' as const, label: 'details' },
-  { id: 'evolution' as const, label: 'evolution' },
-  { id: 'screenshots' as const, label: 'screenshots', badge: 'soon' },
+  { id: 'details' as const, label: 'details', icon: 'doc' as const },
+  { id: 'evolution' as const, label: 'evolution', icon: 'branch' as const },
+  { id: 'screenshots' as const, label: 'screenshots', badge: 'soon', icon: 'image' as const },
 ]
 
 interface RepoData {
