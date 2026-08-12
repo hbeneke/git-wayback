@@ -84,11 +84,10 @@ export default defineNuxtConfig({
     '/': { swr: 300 },
     '/rankings/**': { swr: 300 },
 
-    // Two segments only, so /api/repos/:owner/:repo is cached but its
-    // /evolution subroute is not — that one has its own snapshot cache.
-    // Uncached, every page view cost 6 GitHub calls and capped the whole site
-    // at ~830 views/hour against an authenticated token.
-    '/api/repos/*/*': { swr: 600 },
+    // /api/repos/:owner/:repo is cached in its own handler, not here: a route
+    // rule whose key has a wildcard segment makes Nitro register the page
+    // renderer at that path, and the renderer overwrites the API route in the
+    // radix tree — every request 404d as a missing page.
     '/api/search': { swr: 60 },
     '/api/rankings': { swr: 300 },
     '/api/rankings/**': { swr: 300 },
