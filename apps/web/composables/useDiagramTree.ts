@@ -102,33 +102,37 @@ export function buildTree(files: FileNode[], rootName: string): TreeNode {
     children: [],
   }
 
+  // Folders are looked up by full path rather than scanned out of the parent's
+  // children: the scan was linear in the width of the folder, so a repo with a
+  // few wide directories cost O(files x siblings) to build.
+  const folders = new Map<string, TreeNode>([['', root]])
+
   for (const file of files) {
     const parts = file.path.split('/')
     let current = root
+    let path = ''
 
-    for (let i = 0; i < parts.length; i++) {
+    for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i]
-      const isFile = i === parts.length - 1
-      const path = parts.slice(0, i + 1).join('/')
+      path = path ? `${path}/${part}` : part
 
-      if (isFile) {
-        current.children.push({
-          name: part,
-          path: file.path,
-          type: 'file',
-          extension: file.extension,
-          size: file.size,
-          children: [],
-        })
-      } else {
-        let child = current.children.find((c) => c.name === part && c.type === 'folder')
-        if (!child) {
-          child = { name: part, path, type: 'folder', children: [] }
-          current.children.push(child)
-        }
-        current = child
+      let child = folders.get(path)
+      if (!child) {
+        child = { name: part, path, type: 'folder', children: [] }
+        folders.set(path, child)
+        current.children.push(child)
       }
+      current = child
     }
+
+    current.children.push({
+      name: parts[parts.length - 1],
+      path: file.path,
+      type: 'file',
+      extension: file.extension,
+      size: file.size,
+      children: [],
+    })
   }
 
   return root
