@@ -264,20 +264,17 @@
                 </svg>
               </button>
             </div>
-            <div
+            <FileTreePanel
               v-if="filesPanelOpen && fileTreeRoot"
               ref="filesPanelRef"
-              class="mt-1.5 overflow-y-auto overflow-x-hidden"
-            >
-              <FileTreePanel
-                :nodes="fileTreeRoot.children"
-                :open-set="openFolders"
-                :highlighted-path="hoveredGraphPath"
-                @hover="onTreeHover"
-                @toggle="toggleFolder"
-                @click="onTreeFileClick"
-              />
-            </div>
+              class="mt-1.5 flex-1 min-h-0"
+              :nodes="fileTreeRoot.children"
+              :open-set="openFolders"
+              :highlighted-path="hoveredGraphPath"
+              @hover="onTreeHover"
+              @toggle="toggleFolder"
+              @click="onTreeFileClick"
+            />
           </div>
 
           <!-- Legend (right, collapsible) -->
@@ -420,7 +417,7 @@ const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split
 const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
 const totalSnapshots = computed(() => snapshots.value.length)
 
-const filesPanelRef = ref<HTMLElement | null>(null)
+const filesPanelRef = ref<{ scrollToPath: (path: string) => void } | null>(null)
 const filesPanelOpen = ref(true)
 const legendPanelOpen = ref(true)
 const openFolders = ref<Set<string>>(new Set())
@@ -471,15 +468,8 @@ async function onGraphNodeClick(path: string) {
   openFolders.value = next
 
   await nextTick()
-  // Scoped to the panel's own element. This used to query `.files-overlay`,
-  // a class that exists nowhere in the app, so the row never scrolled.
-  const row = filesPanelRef.value?.querySelector(`[data-path="${cssEscape(path)}"]`)
-  row?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-}
-
-function cssEscape(s: string): string {
-  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(s)
-  return s.replace(/(["\\\[\]:.#])/g, '\\$1')
+  // The panel is virtualized, so the row may not exist — it scrolls by index.
+  filesPanelRef.value?.scrollToPath(path)
 }
 
 watch(hoveredFilePath, (newPath, oldPath) => {
