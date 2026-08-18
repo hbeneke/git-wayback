@@ -193,167 +193,186 @@
           </div>
         </div>
 
-        <!-- Canvas -->
-        <div class="relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
-          <div ref="diagramContainer" class="w-full bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
+        <!-- Stage: canvas plus controls, so the play poster can cover both -->
+        <div class="relative flex flex-col" :class="expanded ? 'flex-1 min-h-0' : ''">
+          <!-- Canvas -->
+          <div class="relative" :class="expanded ? 'flex-1 min-h-0' : 'h-[500px]'">
+            <div ref="diagramContainer" class="w-full bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]" :class="expanded ? 'h-full' : 'h-[500px]'"></div>
 
-          <!-- Center play overlay: loading no longer autoplays, the first
-               snapshot is rendered and waits here for an explicit start. -->
-          <div
-            v-if="showCenterPlay"
-            class="absolute inset-0 z-[28] flex items-center justify-center bg-[rgb(var(--bg))]/55 backdrop-blur-[2px] cursor-pointer"
-            @click="startPlayback"
-          >
-            <button
-              type="button"
-              aria-label="Play evolution"
-              title="Play evolution"
-              class="w-16 h-16 rounded-full flex items-center justify-center border border-primary text-primary bg-bg/70 backdrop-blur transition-all duration-150 hover:scale-110 hover:bg-primary hover:text-[rgb(var(--bg))]"
-              @click.stop="startPlayback"
+            <!-- File tooltip -->
+            <div
+              v-if="tooltip.visible"
+              class="absolute z-30 pointer-events-none bg-bg/95 backdrop-blur border border-[rgb(var(--border))] rounded py-1.5 px-2.5 flex flex-col gap-0.5 text-[11px] font-mono max-w-[320px] whitespace-nowrap overflow-hidden text-ellipsis"
+              :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
             >
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
-          </div>
+              <span class="text-[rgb(var(--muted))]">{{ tooltip.dir }}<span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span></span>
+              <span class="text-primary text-[10px]">{{ tooltip.kind }}</span>
+            </div>
 
-          <!-- File tooltip -->
-          <div
-            v-if="tooltip.visible"
-            class="absolute z-30 pointer-events-none bg-bg/95 backdrop-blur border border-[rgb(var(--border))] rounded py-1.5 px-2.5 flex flex-col gap-0.5 text-[11px] font-mono max-w-[320px] whitespace-nowrap overflow-hidden text-ellipsis"
-            :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
-          >
-            <span class="text-[rgb(var(--muted))]">{{ tooltip.dir }}<span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span></span>
-            <span class="text-primary text-[10px]">{{ tooltip.kind }}</span>
-          </div>
-
-          <!-- Expanded tag message overlay -->
-          <div
-            v-if="messageExpanded && tagIsMultiline && currentSnapshot?.message"
-            class="absolute top-3 left-3 right-3 z-[25] flex items-start gap-3 max-h-[calc(100%-24px)] bg-bg/85 backdrop-blur-[10px] border border-[rgb(var(--border))] rounded py-3 px-3.5 overflow-hidden"
-            @pointerdown.stop
-            @click.stop
-          >
-            <pre class="flex-1 text-[11px] text-[rgb(var(--muted))] whitespace-pre-wrap font-mono leading-relaxed max-h-full overflow-y-auto">{{ currentSnapshot.message.trim() }}</pre>
-            <button
-              @click.stop="messageExpanded = false"
-              aria-label="Collapse message"
-              title="Collapse"
-              class="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[rgb(var(--muted))] hover:text-primary hover:bg-[rgb(var(--border))] transition-colors"
+            <!-- Expanded tag message overlay -->
+            <div
+              v-if="messageExpanded && tagIsMultiline && currentSnapshot?.message"
+              class="absolute top-3 left-3 right-3 z-[25] flex items-start gap-3 max-h-[calc(100%-24px)] bg-bg/85 backdrop-blur-[10px] border border-[rgb(var(--border))] rounded py-3 px-3.5 overflow-hidden"
+              @pointerdown.stop
+              @click.stop
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                <path d="M1 5h8" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Files panel (left) -->
-          <div class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 left-3 w-[220px] max-h-[calc(100%-24px)] flex flex-col" @pointerdown.stop @click.stop>
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">Files</h4>
+              <pre class="flex-1 text-[11px] text-[rgb(var(--muted))] whitespace-pre-wrap font-mono leading-relaxed max-h-full overflow-y-auto">{{ currentSnapshot.message.trim() }}</pre>
               <button
-                type="button"
-                class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
-                :aria-label="filesPanelOpen ? 'Collapse files' : 'Expand files'"
-                :title="filesPanelOpen ? 'Collapse' : 'Expand'"
-                @click="filesPanelOpen = !filesPanelOpen"
+                @click.stop="messageExpanded = false"
+                aria-label="Collapse message"
+                title="Collapse"
+                class="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[rgb(var(--muted))] hover:text-primary hover:bg-[rgb(var(--border))] transition-colors"
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                  <path v-if="filesPanelOpen" d="M1 5h8" />
-                  <path v-else d="M1 5h8 M5 1v8" />
+                  <path d="M1 5h8" />
                 </svg>
               </button>
             </div>
-            <FileTreePanel
-              v-if="filesPanelOpen && fileTreeRoot"
-              ref="filesPanelRef"
-              class="mt-1.5 flex-1 min-h-0"
-              :nodes="fileTreeRoot.children"
-              :open-set="openFolders"
-              :highlighted-path="hoveredGraphPath"
-              @hover="onTreeHover"
-              @toggle="toggleFolder"
-              @click="onTreeFileClick"
-            />
-          </div>
 
-          <!-- Legend (right, collapsible) -->
-          <div class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 right-3" @pointerdown.stop @click.stop>
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">File types</h4>
-              <button
-                type="button"
-                class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
-                :aria-label="legendPanelOpen ? 'Collapse legend' : 'Expand legend'"
-                :title="legendPanelOpen ? 'Collapse' : 'Expand'"
-                @click="legendPanelOpen = !legendPanelOpen"
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                  <path v-if="legendPanelOpen" d="M1 5h8" />
-                  <path v-else d="M1 5h8 M5 1v8" />
-                </svg>
-              </button>
-            </div>
-            <div v-if="legendPanelOpen" class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
-              <button
-                v-for="(color, ext) in EXTENSION_COLORS"
-                :key="ext"
-                @click="toggleExtension(ext as string)"
-                class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
-                :class="{ 'opacity-30': hiddenExtensions.has(ext as string) }"
-              >
-                <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: hiddenExtensions.has(ext as string) ? 'rgb(var(--muted))' : color }" />
-                <span class="text-[10px] text-[rgb(var(--foreground))]">.{{ ext }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Controls -->
-        <div class="px-4 py-3 border-t border-[rgb(var(--border))] relative z-10">
-          <div class="flex items-center gap-3">
-            <button
-              @click="onTogglePlay"
-              class="w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border"
-              :class="isPlaying
-                ? 'border-primary text-primary'
-                : 'border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]'"
+            <!-- Files panel (left) -->
+            <!-- Expanded keeps clear of the controls now floating over the graph. -->
+            <div
+              class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 left-3 w-[220px] flex flex-col"
+              :class="expanded ? 'max-h-[calc(100%-104px)]' : 'max-h-[calc(100%-24px)]'"
+              @pointerdown.stop
+              @click.stop
             >
-              {{ isPlaying ? '||' : '>' }}
-            </button>
-
-            <div class="flex-1 relative">
-              <!-- Segmented timeline -->
-              <div class="flex h-6 items-end gap-px">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">Files</h4>
                 <button
-                  v-for="(snap, i) in snapshots"
-                  :key="snap.tag"
-                  @click="seekTo(i)"
-                  @mouseenter="hoveredIndex = i"
-                  @mouseleave="hoveredIndex = null"
-                  class="flex-1 rounded-sm transition-all duration-150 cursor-pointer"
-                  :class="i <= currentIndex ? 'bg-primary' : 'bg-[rgb(var(--border))]'"
-                  :style="{ height: i === currentIndex ? '100%' : i === hoveredIndex ? '80%' : '40%' }"
-                />
+                  type="button"
+                  class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
+                  :aria-label="filesPanelOpen ? 'Collapse files' : 'Expand files'"
+                  :title="filesPanelOpen ? 'Collapse' : 'Expand'"
+                  @click="filesPanelOpen = !filesPanelOpen"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path v-if="filesPanelOpen" d="M1 5h8" />
+                    <path v-else d="M1 5h8 M5 1v8" />
+                  </svg>
+                </button>
               </div>
-              <!-- Hover tooltip -->
-              <div
-                v-if="hoveredIndex !== null"
-                class="absolute -top-6 bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded px-2 py-0.5 text-[10px] text-primary font-semibold whitespace-nowrap pointer-events-none"
-                :style="{ left: `${(hoveredIndex / Math.max(snapshots.length - 1, 1)) * 100}%`, transform: 'translateX(-50%)' }"
-              >
-                {{ snapshots[hoveredIndex].tag }}
-              </div>
+              <FileTreePanel
+                v-if="filesPanelOpen && fileTreeRoot"
+                ref="filesPanelRef"
+                class="mt-1.5 flex-1 min-h-0"
+                :nodes="fileTreeRoot.children"
+                :open-set="openFolders"
+                :highlighted-path="hoveredGraphPath"
+                @hover="onTreeHover"
+                @toggle="toggleFolder"
+                @click="onTreeFileClick"
+              />
             </div>
 
-            <span class="text-xs text-[rgb(var(--muted))] min-w-[50px] text-right">
-              {{ currentIndex + 1 }}/{{ snapshots.length }}
-            </span>
+            <!-- Legend (right, collapsible) -->
+            <div class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 right-3" @pointerdown.stop @click.stop>
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-[10px] text-[rgb(var(--muted))] font-semibold uppercase tracking-wider m-0">File types</h4>
+                <button
+                  type="button"
+                  class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
+                  :aria-label="legendPanelOpen ? 'Collapse legend' : 'Expand legend'"
+                  :title="legendPanelOpen ? 'Collapse' : 'Expand'"
+                  @click="legendPanelOpen = !legendPanelOpen"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path v-if="legendPanelOpen" d="M1 5h8" />
+                    <path v-else d="M1 5h8 M5 1v8" />
+                  </svg>
+                </button>
+              </div>
+              <div v-if="legendPanelOpen" class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
+                <button
+                  v-for="(color, ext) in EXTENSION_COLORS"
+                  :key="ext"
+                  @click="toggleExtension(ext as string)"
+                  class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
+                  :class="{ 'opacity-30': hiddenExtensions.has(ext as string) }"
+                >
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: hiddenExtensions.has(ext as string) ? 'rgb(var(--muted))' : color }" />
+                  <span class="text-[10px] text-[rgb(var(--foreground))]">.{{ ext }}</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="flex justify-between mt-1.5 text-[10px] text-[rgb(var(--muted))]">
-            <span>{{ snapshots[0]?.tag }}</span>
-            <span>{{ snapshots[snapshots.length - 1]?.tag }}</span>
+
+          <!-- Controls. Expanded floats them over the graph so it keeps the full height. -->
+          <div
+            class="px-4 py-3 border-t border-[rgb(var(--border))] z-20"
+            :class="expanded
+              ? 'absolute inset-x-0 bottom-0 bg-[rgb(var(--bg))]/70 backdrop-blur'
+              : 'relative'"
+          >
+            <div class="flex items-center gap-3">
+              <button
+                @click="onTogglePlay"
+                class="w-7 h-7 rounded flex items-center justify-center text-xs transition-colors border"
+                :class="isPlaying
+                  ? 'border-primary text-primary'
+                  : 'border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]'"
+              >
+                {{ isPlaying ? '||' : '>' }}
+              </button>
+
+              <div class="flex-1 relative">
+                <!-- Segmented timeline -->
+                <div class="flex h-6 items-end gap-px">
+                  <button
+                    v-for="(snap, i) in snapshots"
+                    :key="snap.tag"
+                    @click="seekTo(i)"
+                    @mouseenter="hoveredIndex = i"
+                    @mouseleave="hoveredIndex = null"
+                    class="flex-1 rounded-sm transition-all duration-150 cursor-pointer"
+                    :class="i <= currentIndex ? 'bg-primary' : 'bg-[rgb(var(--border))]'"
+                    :style="{ height: i === currentIndex ? '100%' : i === hoveredIndex ? '80%' : '40%' }"
+                  />
+                </div>
+                <!-- Hover tooltip -->
+                <div
+                  v-if="hoveredIndex !== null"
+                  class="absolute -top-6 bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded px-2 py-0.5 text-[10px] text-primary font-semibold whitespace-nowrap pointer-events-none"
+                  :style="{ left: `${(hoveredIndex / Math.max(snapshots.length - 1, 1)) * 100}%`, transform: 'translateX(-50%)' }"
+                >
+                  {{ snapshots[hoveredIndex].tag }}
+                </div>
+              </div>
+
+              <span class="text-xs text-[rgb(var(--muted))] min-w-[50px] text-right">
+                {{ currentIndex + 1 }}/{{ snapshots.length }}
+              </span>
+            </div>
+            <div class="flex justify-between mt-1.5 text-[10px] text-[rgb(var(--muted))]">
+              <span>{{ snapshots[0]?.tag }}</span>
+              <span>{{ snapshots[snapshots.length - 1]?.tag }}</span>
+            </div>
           </div>
+
+          <!-- Play poster: frosted, over the controls, like a video before it starts.
+               It dissolves on play rather than cutting, so the graph is revealed. -->
+          <Transition
+            leave-active-class="transition-all duration-500 ease-out"
+            leave-to-class="opacity-0 backdrop-blur-none [&>button]:scale-[2.4] [&>button]:opacity-0"
+          >
+            <div
+              v-if="showCenterPlay"
+              class="absolute inset-0 z-30 flex items-center justify-center cursor-pointer bg-[rgb(var(--bg))]/55 backdrop-blur-md"
+              @click="startPlayback"
+            >
+              <button
+                type="button"
+                aria-label="Play evolution"
+                title="Play evolution"
+                class="w-16 h-16 rounded-full flex items-center justify-center border border-primary text-primary bg-bg/70 backdrop-blur transition-all duration-300 ease-out hover:scale-110 hover:bg-primary hover:text-[rgb(var(--bg))]"
+                @click.stop="startPlayback"
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+            </div>
+          </Transition>
         </div>
       </div>
     </template>
@@ -406,6 +425,7 @@ const hiddenExtensions = ref<Set<string>>(new Set())
 const hoveredIndex = ref<number | null>(null)
 const messageExpanded = ref(false)
 const expanded = ref(false)
+const headerCollapsed = useHeaderCollapsed()
 const headerOffset = ref(56)
 // Shallow: rewritten wholesale on every mousemove.
 const tooltip = shallowRef<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
@@ -549,15 +569,8 @@ function reconfigure() {
   currentIndex.value = 0
 }
 
-// Measure the sticky AppHeader so the expanded overlay starts just below it.
-function measureHeader() {
-  const h = document.querySelector('header.sticky')?.getBoundingClientRect().height
-  if (h) headerOffset.value = Math.round(h)
-}
-
 function toggleExpand() {
   expanded.value = !expanded.value
-  if (expanded.value) measureHeader()
   // Resize the radial layout to the new container size (ResizeObserver also
   // fires, but call directly so it snaps without the debounce delay).
   nextTick(() => updateTree())
@@ -571,6 +584,8 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 watch(expanded, (v) => {
+  // Expanded is meant to hand the graph every pixel, so the header collapses too.
+  headerCollapsed.value = v
   if (typeof document !== 'undefined') {
     document.body.style.overflow = v ? 'hidden' : ''
   }
@@ -621,11 +636,25 @@ watch(diagramContainer, (el, prev) => {
   if (el) resizeObserver.observe(el)
 })
 
+// The header animates as it collapses, so track its height instead of measuring once.
+let headerObserver: ResizeObserver | null = null
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+
+  const header = document.querySelector('header.sticky')
+  if (!header) return
+  const readHeight = () => {
+    headerOffset.value = Math.round(header.getBoundingClientRect().height)
+  }
+  readHeight()
+  headerObserver = new ResizeObserver(readHeight)
+  headerObserver.observe(header)
 })
 
 onUnmounted(() => {
+  headerCollapsed.value = false
+  headerObserver?.disconnect()
   resizeObserver.disconnect()
   if (resizeTimer) clearTimeout(resizeTimer)
   if (redrawFrame !== null) cancelAnimationFrame(redrawFrame)
