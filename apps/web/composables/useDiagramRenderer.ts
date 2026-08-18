@@ -11,26 +11,26 @@ import {
   RENDER_FILE_BUDGET,
 } from './useDiagramTree'
 
-const HOVER_TRANSITION_MS = 300
-const HOVER_SCALE = 2.2
-// Links inherit the connected (target) node's color; this keeps them subtle
-// at rest while hover bumps the opacity to full.
-const LINK_BASE_OPACITY = 0.35
-// Above this many nodes the enter/exit fades are dropped — the layout itself is
-// animated by the simulation, so the fades are pure overhead on big graphs.
-const ANIMATE_MAX_NODES = 900
+const TAU = Math.PI * 2
 
-// Simulation tuning. alphaDecay/alphaMin are deliberately faster than d3's
-// defaults (~300 ticks): the graph should settle in well under the 2s playback
-// interval and then stop burning frames.
+const HOVER_SCALE = 2.2
+const HOVER_MS = 160
+const LINK_BASE_ALPHA = 0.35
+/** Screen-space slack around the cursor when picking a node. */
+const HIT_RADIUS_PX = 10
+
+// Faster than d3 defaults so the graph settles well inside the playback interval.
 const SIM_ALPHA_DECAY = 0.055
 const SIM_ALPHA_MIN = 0.02
 const SIM_VELOCITY_DECAY = 0.45
 /** Alpha injected when a new snapshot arrives — a nudge, not a full reheat. */
 const SIM_RESTART_ALPHA = 0.55
 
-// darken() re-parses the color string on every call. The palette is tiny, so
-// cache the derived stroke colors across renders.
+const FOLDER_ROOT_FILL = 'rgb(16, 185, 129)'
+const FOLDER_FILL = 'rgba(16, 185, 129, 0.4)'
+const MORE_FILL = 'rgba(107, 114, 128, 0.35)'
+
+// darken() re-parses the color string on every call; the palette is tiny.
 const strokeCache = new Map<string, string>()
 function strokeFor(color: string): string {
   let s = strokeCache.get(color)
@@ -47,12 +47,18 @@ interface SimNode extends d3.SimulationNodeDatum {
   depth: number
   r: number
   parentKey: string | null
+  fill: string
+  stroke: string
+  dashed: boolean
+  /** Batch key — nodes sharing one are drawn as a single canvas path. */
+  style: string
 }
 
 interface SimLink extends d3.SimulationLinkDatum<SimNode> {
   key: string
   source: SimNode
   target: SimNode
+  color: string
 }
 
 export function useDiagramRenderer(
@@ -65,29 +71,49 @@ export function useDiagramRenderer(
   onNodeClick: (path: string) => void,
   expanded?: Ref<boolean>,
 ) {
-  // Normal mode keeps the fixed design height; expanded mode fills the
-  // container vertically (overlay below the app header).
+  // Expanded mode fills the container; normal mode keeps the design height.
   const resolveHeight = (el: HTMLElement | null) =>
     expanded?.value && el?.clientHeight ? el.clientHeight : DIAGRAM.HEIGHT
-
-  let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
-  let svgRoot: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
   // Folders whose 'more' bubble the user clicked — rendered in full from then on.
   const expandedFolders = new Set<string>()
   /** Files currently folded into 'more' bubbles; 0 when the whole tree is drawn. */
   const collapsedFiles = ref(0)
 
-  // Simulation state. Nodes are kept in a map keyed by path so a file that
-  // survives from one snapshot to the next keeps its position and velocity —
-  // that continuity is what makes the graph look like it is growing rather
-  // than being redrawn.
+  // Canvas, not SVG: moving thousands of SVG elements per tick is what stalls big repos.
+  let canvas: HTMLCanvasElement | null = null
+  let canvasSel: d3.Selection<HTMLCanvasElement, unknown, null, undefined> | null = null
+  let ctx: CanvasRenderingContext2D | null = null
+  let zoomBehavior: d3.ZoomBehavior<HTMLCanvasElement, unknown> | null = null
+  let transform = d3.zoomIdentity
+  let width = DIAGRAM.DEFAULT_WIDTH
+  let height = DIAGRAM.HEIGHT
+  let centerX = width / 2
+  let centerY = height / 2
+
+  // Keyed by path so a surviving file keeps its position — that is what makes the graph grow.
   let simulation: d3.Simulation<SimNode, SimLink> | null = null
   const nodeByKey = new Map<string, SimNode>()
-  let nodeSel: d3.Selection<SVGGElement, SimNode, SVGGElement, unknown> | null = null
-  let linkSel: d3.Selection<SVGPathElement, SimLink, SVGGElement, unknown> | null = null
-  let centerX = DIAGRAM.DEFAULT_WIDTH / 2
-  let centerY = DIAGRAM.HEIGHT / 2
+  let nodes: SimNode[] = []
+  let links: SimLink[] = []
+  /** Parent link of each node, for the hover highlight. */
+  const linkByTarget = new Map<string, SimLink>()
+  let moreNodes: SimNode[] = []
+
+  // Draw batches: one canvas path per color instead of one element per bubble.
+  let nodeBatches: SimNode[][] = []
+  let linkBatches: SimLink[][] = []
+  let enterNodeBatches: SimNode[][] = []
+  let enterLinkBatches: SimLink[][] = []
+  let enterStart = 0
+  let entering = false
+
+  let drawFrame: number | null = null
+  let quadtree: d3.Quadtree<SimNode> | null = null
+
+  let hovered: SimNode | null = null
+  let hoverStart = 0
+  let externalKey: string | null = null
 
   function getNodeRadius(d: { data: TreeNode; depth: number }): number {
     if (d.data.type === 'folder') {
@@ -99,6 +125,12 @@ export function useDiagramRenderer(
     return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
   }
 
+  function fillFor(data: TreeNode, depth: number): string {
+    if (data.type === 'folder') return depth === 0 ? FOLDER_ROOT_FILL : FOLDER_FILL
+    if (data.type === 'more') return MORE_FILL
+    return getExtensionColor(data.extension || null)
+  }
+
   function isExtensionHidden(ext: string | null): boolean {
     if (!ext) return hiddenExtensions.value.has('other')
     const normalizedExt = ext.toLowerCase()
@@ -108,7 +140,7 @@ export function useDiagramRenderer(
     return hiddenExtensions.value.has('other')
   }
 
-  function showTooltip(event: MouseEvent, data: TreeNode) {
+  function showTooltip(clientX: number, clientY: number, data: TreeNode) {
     const wrapper = diagramContainer.value?.parentElement
     if (!wrapper) return
     const rect = wrapper.getBoundingClientRect()
@@ -116,8 +148,8 @@ export function useDiagramRenderer(
     const dir = parts.length > 1 ? `${parts.slice(0, -1).join('/')}/` : ''
     tooltip.value = {
       visible: true,
-      x: event.clientX - rect.left + 12,
-      y: event.clientY - rect.top - 8,
+      x: clientX - rect.left + 12,
+      y: clientY - rect.top - 8,
       name: data.name,
       dir,
       kind: getFileKind(data),
@@ -129,76 +161,35 @@ export function useDiagramRenderer(
     tooltip.value = { ...tooltip.value, visible: false }
   }
 
-  function highlightParentLink(
-    linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    data: TreeNode,
-  ) {
-    linksGroup
-      .selectAll<SVGPathElement, SimLink>('path')
-      .filter((d) => d.target.key === (data.path || data.name))
-      .transition()
-      .duration(HOVER_TRANSITION_MS)
-      .attr('stroke', getNodeColor(data))
-      .attr('stroke-opacity', 1)
-      .attr('stroke-width', 1.5)
+  function batchNodes(list: SimNode[]): SimNode[][] {
+    const byStyle = new Map<string, SimNode[]>()
+    for (const n of list) {
+      const bucket = byStyle.get(n.style)
+      if (bucket) bucket.push(n)
+      else byStyle.set(n.style, [n])
+    }
+    return [...byStyle.values()]
   }
 
-  function unhighlightParentLink(
-    linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    data: TreeNode,
-  ) {
-    linksGroup
-      .selectAll<SVGPathElement, SimLink>('path')
-      .filter((d) => d.target.key === (data.path || data.name))
-      .transition()
-      .duration(HOVER_TRANSITION_MS)
-      .attr('stroke', getNodeColor(data))
-      .attr('stroke-opacity', LINK_BASE_OPACITY)
-      .attr('stroke-width', 1)
+  function batchLinks(list: SimLink[]): SimLink[][] {
+    const byColor = new Map<string, SimLink[]>()
+    for (const l of list) {
+      const bucket = byColor.get(l.color)
+      if (bucket) bucket.push(l)
+      else byColor.set(l.color, [l])
+    }
+    return [...byColor.values()]
   }
 
-  function highlightNodeCircle(
-    nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    data: TreeNode,
-  ) {
-    nodesGroup
-      .selectAll<SVGGElement, SimNode>('g')
-      .filter((d) => d.key === (data.path || data.name))
-      .select<SVGCircleElement>('circle.main')
-      .transition()
-      .duration(HOVER_TRANSITION_MS)
-      .attr('r', function () {
-        const d = d3.select(this).datum() as SimNode
-        return d.r * HOVER_SCALE
-      })
-  }
+  /** Rebuilds nodes/links for the current snapshot, reusing surviving bodies. */
+  function buildGraph() {
+    if (!fileTree.value) {
+      nodes = []
+      links = []
+      return
+    }
 
-  function unhighlightNodeCircle(
-    nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    data: TreeNode,
-  ) {
-    nodesGroup
-      .selectAll<SVGGElement, SimNode>('g')
-      .filter((d) => d.key === (data.path || data.name))
-      .select<SVGCircleElement>('circle.main')
-      .transition()
-      .duration(HOVER_TRANSITION_MS)
-      .attr('r', function () {
-        const d = d3.select(this).datum() as SimNode
-        return d.r
-      })
-  }
-
-  /**
-   * Builds the simulation node/link arrays for the current snapshot, reusing
-   * (and repositioning) the nodes that already exist. New nodes spawn on top of
-   * their parent with a little jitter so they visibly push outwards from it.
-   */
-  function buildGraph(): { nodes: SimNode[]; links: SimLink[] } {
-    if (!fileTree.value) return { nodes: [], links: [] }
-
-    // Thin the tree first: on a big repo most of the cost is simply the number
-    // of elements the simulation and the DOM have to carry.
+    // Thin first: on a big repo the cost is simply the number of bodies carried.
     const tree = collapseTree(fileTree.value, RENDER_FILE_BUDGET, expandedFolders)
     const root = d3.hierarchy(tree)
     const descendants = root.descendants()
@@ -208,67 +199,99 @@ export function useDiagramRenderer(
       0,
     )
 
-    const visible = descendants.filter((d) => {
-      if (d.data.type !== 'file') return true
-      return !isExtensionHidden(d.data.extension || null)
-    })
-
     const seen = new Set<string>()
-    const nodes: SimNode[] = []
+    const next: SimNode[] = []
+    const fresh: SimNode[] = []
+    const freshKeys = new Set<string>()
+    moreNodes = []
 
-    for (const d of visible) {
+    for (const d of descendants) {
+      if (d.data.type === 'file' && isExtensionHidden(d.data.extension || null)) continue
+
       const key = d.data.path || d.data.name
       const parentKey = d.parent ? d.parent.data.path || d.parent.data.name : null
       seen.add(key)
 
       let node = nodeByKey.get(key)
       if (!node) {
+        // New bubbles spawn on their parent with jitter so they push outwards.
         const parent = parentKey ? nodeByKey.get(parentKey) : null
+        const fill = fillFor(d.data, d.depth)
+        const stroke = strokeFor(getNodeColor(d.data))
+        const dashed = d.data.type === 'more'
         node = {
           key,
           data: d.data,
           depth: d.depth,
           r: 1,
           parentKey,
+          fill,
+          stroke,
+          dashed,
+          style: `${fill}|${stroke}|${dashed ? 1 : 0}`,
           x: (parent?.x ?? centerX) + (Math.random() - 0.5) * 20,
           y: (parent?.y ?? centerY) + (Math.random() - 0.5) * 20,
         }
         nodeByKey.set(key, node)
+        fresh.push(node)
+        freshKeys.add(key)
       }
       node.data = d.data
       node.depth = d.depth
       node.parentKey = parentKey
       node.r = getNodeRadius(d)
-      nodes.push(node)
+      next.push(node)
+      if (d.data.type === 'more') moreNodes.push(node)
     }
 
-    // Drop nodes that left the graph, otherwise the map grows across the whole
-    // timeline and the simulation keeps ticking bodies nobody can see.
+    // Drop departed nodes, else the simulation keeps ticking invisible bodies.
     for (const key of nodeByKey.keys()) {
       if (!seen.has(key)) nodeByKey.delete(key)
     }
 
-    const links: SimLink[] = []
-    for (const node of nodes) {
+    const nextLinks: SimLink[] = []
+    const freshLinks: SimLink[] = []
+    linkByTarget.clear()
+
+    for (const node of next) {
       if (!node.parentKey) continue
       const source = nodeByKey.get(node.parentKey)
       if (!source) continue
-      links.push({ key: `${source.key}->${node.key}`, source, target: node })
+      const link: SimLink = {
+        key: `${source.key}->${node.key}`,
+        source,
+        target: node,
+        color: getNodeColor(node.data),
+      }
+      nextLinks.push(link)
+      linkByTarget.set(node.key, link)
+      if (freshKeys.has(node.key)) freshLinks.push(link)
     }
 
     // The repo root anchors the whole graph at the center.
-    const rootNode = nodes[0]
+    const rootNode = next[0]
     if (rootNode && rootNode.depth === 0) {
       rootNode.fx = centerX
       rootNode.fy = centerY
     }
 
-    return { nodes, links }
+    nodes = next
+    links = nextLinks
+
+    // Everything entering this snapshot shares one fade, so it stays one batch.
+    entering = fresh.length > 0
+    nodeBatches = batchNodes(entering ? next.filter((n) => !freshKeys.has(n.key)) : next)
+    linkBatches = batchLinks(
+      entering ? nextLinks.filter((l) => !freshKeys.has(l.target.key)) : nextLinks,
+    )
+    enterNodeBatches = batchNodes(fresh)
+    enterLinkBatches = batchLinks(freshLinks)
+    enterStart = performance.now()
+    quadtree = null
   }
 
   function linkDistance(d: SimLink): number {
-    // Shorter as we go deeper, so folders spread out and their files cluster
-    // tightly around them instead of everything fighting for the same ring.
+    // Shorter with depth so files cluster around their folder.
     return Math.max(12, 70 / Math.max(d.target.depth, 1)) + d.target.r
   }
 
@@ -290,8 +313,7 @@ export function useDiagramRenderer(
         d3
           .forceManyBody<SimNode>()
           .strength(-38)
-          // Bounding the range keeps the Barnes-Hut pass cheap on big graphs;
-          // distant nodes barely influence each other anyway.
+          // Bounding the range keeps the Barnes-Hut pass cheap on big graphs.
           .distanceMax(420)
           .theta(0.9),
       )
@@ -301,258 +323,249 @@ export function useDiagramRenderer(
       .velocityDecay(SIM_VELOCITY_DECAY)
       .alphaDecay(SIM_ALPHA_DECAY)
       .alphaMin(SIM_ALPHA_MIN)
-      .on('tick', ticked)
+      .on('tick', onTick)
 
     return simulation
   }
 
-  // Called once per simulation tick, so it must stay allocation-light: plain
-  // attribute writes, no transitions, no selection lookups.
-  function ticked() {
-    nodeSel?.attr('transform', (d) => `translate(${d.x},${d.y})`)
-    linkSel?.attr('d', (d) => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`)
+  // Positions moved: picking index is stale and the canvas needs one repaint.
+  function onTick() {
+    quadtree = null
+    requestDraw()
   }
 
-  function renderGraph(
-    linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  ) {
-    const { nodes, links } = buildGraph()
+  function requestDraw() {
+    if (drawFrame !== null) return
+    drawFrame = requestAnimationFrame(draw)
+  }
+
+  function paintNodeBatch(c: CanvasRenderingContext2D, batch: SimNode[]) {
+    const first = batch[0]
+    c.beginPath()
+    for (const n of batch) {
+      c.moveTo((n.x ?? 0) + n.r, n.y ?? 0)
+      c.arc(n.x ?? 0, n.y ?? 0, n.r, 0, TAU)
+    }
+    c.fillStyle = first.fill
+    c.fill()
+    c.strokeStyle = first.stroke
+    c.lineWidth = first.dashed ? 1.2 : 1
+    if (first.dashed) c.setLineDash([2, 2])
+    c.stroke()
+    if (first.dashed) c.setLineDash([])
+  }
+
+  function paintLinkBatch(c: CanvasRenderingContext2D, batch: SimLink[]) {
+    c.beginPath()
+    for (const l of batch) {
+      c.moveTo(l.source.x ?? 0, l.source.y ?? 0)
+      c.lineTo(l.target.x ?? 0, l.target.y ?? 0)
+    }
+    c.strokeStyle = batch[0].color
+    c.lineWidth = 1
+    c.stroke()
+  }
+
+  function draw() {
+    drawFrame = null
+    const c = ctx
+    if (!c) return
+
+    const now = performance.now()
+    const enterAlpha = entering
+      ? Math.min(1, (now - enterStart) / D3_EXIT_TRANSITION_DURATION_MS)
+      : 1
+    // Fade done: fold the new bubbles into the main batches so they keep drawing.
+    if (entering && enterAlpha >= 1) {
+      nodeBatches = batchNodes(nodes)
+      linkBatches = batchLinks(links)
+      enterNodeBatches = []
+      enterLinkBatches = []
+      entering = false
+    }
+
+    const dpr = window.devicePixelRatio || 1
+    c.setTransform(dpr, 0, 0, dpr, 0, 0)
+    c.clearRect(0, 0, width, height)
+    c.translate(transform.x, transform.y)
+    c.scale(transform.k, transform.k)
+
+    c.globalAlpha = LINK_BASE_ALPHA
+    for (const batch of linkBatches) paintLinkBatch(c, batch)
+    if (enterAlpha < 1) {
+      c.globalAlpha = LINK_BASE_ALPHA * enterAlpha
+      for (const batch of enterLinkBatches) paintLinkBatch(c, batch)
+    }
+
+    c.globalAlpha = 1
+    for (const batch of nodeBatches) paintNodeBatch(c, batch)
+    if (enterAlpha < 1) {
+      c.globalAlpha = enterAlpha
+      for (const batch of enterNodeBatches) paintNodeBatch(c, batch)
+      c.globalAlpha = 1
+    }
+
+    if (moreNodes.length) {
+      c.fillStyle = '#d4d4d4'
+      c.font = '8px ui-monospace, monospace'
+      c.textAlign = 'center'
+      c.textBaseline = 'middle'
+      for (const n of moreNodes) c.fillText(n.data.name, n.x ?? 0, n.y ?? 0)
+    }
+
+    // Highlight is redrawn on top of its batch — one extra circle, no re-batch.
+    const focus = hovered ?? (externalKey ? (nodeByKey.get(externalKey) ?? null) : null)
+    let animating = false
+    if (focus) {
+      const t = hovered ? Math.min(1, (now - hoverStart) / HOVER_MS) : 1
+      animating = t < 1
+      const eased = t * (2 - t)
+      const r = focus.r * (1 + (HOVER_SCALE - 1) * eased)
+
+      const link = linkByTarget.get(focus.key)
+      if (link) {
+        c.beginPath()
+        c.moveTo(link.source.x ?? 0, link.source.y ?? 0)
+        c.lineTo(link.target.x ?? 0, link.target.y ?? 0)
+        c.strokeStyle = link.color
+        c.lineWidth = 1.5
+        c.stroke()
+      }
+
+      c.beginPath()
+      c.moveTo((focus.x ?? 0) + r, focus.y ?? 0)
+      c.arc(focus.x ?? 0, focus.y ?? 0, r, 0, TAU)
+      c.fillStyle = focus.fill
+      c.fill()
+      c.strokeStyle = focus.stroke
+      c.lineWidth = 1
+      c.stroke()
+    }
+
+    c.setTransform(1, 0, 0, 1, 0, 0)
+    if (animating || entering) requestDraw()
+  }
+
+  // Rebuilt lazily: ticks invalidate it far more often than the cursor uses it.
+  function getQuadtree(): d3.Quadtree<SimNode> {
+    if (!quadtree) {
+      quadtree = d3
+        .quadtree<SimNode>()
+        .x((d) => d.x ?? 0)
+        .y((d) => d.y ?? 0)
+        .addAll(nodes)
+    }
+    return quadtree
+  }
+
+  function pick(event: MouseEvent): SimNode | null {
+    if (!canvas || !nodes.length) return null
+    const [mx, my] = d3.pointer(event, canvas)
+    const [px, py] = transform.invert([mx, my])
+    return getQuadtree().find(px, py, HIT_RADIUS_PX / transform.k) ?? null
+  }
+
+  function setHovered(node: SimNode | null) {
+    if (hovered === node) return
+    hovered = node
+    hoverStart = performance.now()
+    hoveredGraphPath.value = node ? node.key : null
+    if (!node) hideTooltip()
+    requestDraw()
+  }
+
+  function bindEvents(el: HTMLCanvasElement) {
+    el.style.cursor = 'pointer'
+
+    el.addEventListener('mousemove', (event) => {
+      const node = pick(event)
+      setHovered(node)
+      if (node) showTooltip(event.clientX, event.clientY, node.data)
+    })
+
+    el.addEventListener('mouseleave', () => setHovered(null))
+
+    el.addEventListener('click', (event) => {
+      const node = pick(event)
+      if (!node) return
+      event.stopPropagation()
+
+      // A 'more' bubble expands its folder, and stays expanded across snapshots.
+      if (node.data.type === 'more') {
+        expandedFolders.add(node.parentKey ?? '')
+        setHovered(null)
+        hideTooltip()
+        updateTree()
+        return
+      }
+
+      showTooltip(event.clientX, event.clientY, node.data)
+      onNodeClick(node.key)
+    })
+  }
+
+  function resizeCanvas() {
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = Math.round(width * dpr)
+    canvas.height = Math.round(height * dpr)
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+  }
+
+  function measure() {
+    const el = diagramContainer.value
+    width = el?.clientWidth || DIAGRAM.DEFAULT_WIDTH
+    height = resolveHeight(el)
+    centerX = width / 2
+    centerY = height / 2
+  }
+
+  function render() {
+    buildGraph()
     if (!nodes.length) return
-
-    // Hover/click handlers are delegated once on the two groups (see
-    // bindDelegatedEvents), so nothing below attaches per-element listeners.
-    const animate = nodes.length <= ANIMATE_MAX_NODES
-
-    // Links
-    const linkJoin = linksGroup.selectAll<SVGPathElement, SimLink>('path').data(links, (d) => d.key)
-
-    const linkExit = linkJoin.exit()
-    if (animate) {
-      linkExit.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 0).remove()
-    } else {
-      linkExit.remove()
-    }
-
-    const linkEnter = linkJoin
-      .enter()
-      .append('path')
-      .attr('fill', 'none')
-      .attr('stroke', (d) => getNodeColor(d.target.data))
-      .attr('stroke-opacity', LINK_BASE_OPACITY)
-      .attr('stroke-width', 1)
-      .attr('opacity', animate ? 0 : 1)
-
-    if (animate) {
-      linkEnter.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 1)
-    }
-
-    linkSel = linkEnter.merge(linkJoin)
-
-    // Nodes
-    const nodeJoin = nodesGroup.selectAll<SVGGElement, SimNode>('g').data(nodes, (d) => d.key)
-
-    const nodeExit = nodeJoin.exit()
-    if (animate) {
-      nodeExit.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 0).remove()
-    } else {
-      nodeExit.remove()
-    }
-
-    const nodeEnter = nodeJoin
-      .enter()
-      .append('g')
-      .attr('opacity', animate ? 0 : 1)
-      .attr('transform', (d) => `translate(${d.x},${d.y})`)
-
-    if (animate) {
-      nodeEnter.transition().duration(D3_EXIT_TRANSITION_DURATION_MS).attr('opacity', 1)
-    }
-
-    // A node is keyed by path, so fill/stroke never change once it exists —
-    // set them on enter rather than rewriting every circle on every snapshot.
-    nodeEnter
-      .append('circle')
-      .attr('class', 'main')
-      .attr('r', (d) => d.r)
-      .attr('fill', (d) => {
-        if (d.data.type === 'folder') {
-          return d.depth === 0 ? 'rgb(16, 185, 129)' : 'rgba(16, 185, 129, 0.4)'
-        }
-        if (d.data.type === 'more') return 'rgba(107, 114, 128, 0.35)'
-        return getExtensionColor(d.data.extension || null)
-      })
-      .attr('stroke', (d) => strokeFor(getNodeColor(d.data)))
-      .attr('stroke-width', (d) => (d.data.type === 'more' ? 1.2 : 1))
-      .attr('stroke-dasharray', (d) => (d.data.type === 'more' ? '2 2' : null))
-
-    // Count label, only on the handful of 'more' bubbles.
-    nodeEnter
-      .filter((d) => d.data.type === 'more')
-      .append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', '0.34em')
-      .attr('font-size', 8)
-      .attr('fill', '#d4d4d4')
-      .style('pointer-events', 'none')
-      .style('user-select', 'none')
-      .text((d) => d.data.name)
-
-    nodeSel = nodeEnter.merge(nodeJoin)
-
-    // A 'more' bubble grows as its folder gains files, so its radius does move.
-    nodeSel
-      .select<SVGCircleElement>('circle.main')
-      .filter((d) => d.data.type === 'more')
-      .attr('r', (d) => d.r)
-    nodeSel.select<SVGTextElement>('text').text((d) => d.data.name)
 
     const sim = ensureSimulation()
     sim.nodes(nodes)
     sim.force<d3.ForceLink<SimNode, SimLink>>('link')?.links(links)
     sim.alpha(SIM_RESTART_ALPHA).restart()
-  }
-
-  // One listener per group rather than per element. Events bubble up from the
-  // circles/paths, so the datum is read off event.target.
-  function bindDelegatedEvents(
-    linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-  ) {
-    linksGroup.style('cursor', 'pointer').style('pointer-events', 'visibleStroke')
-    nodesGroup.style('cursor', 'pointer')
-
-    const linkAt = (event: Event) => {
-      const t = event.target as Element | null
-      if (!t || t.tagName !== 'path') return null
-      return d3.select<SVGPathElement, SimLink>(t as SVGPathElement)
-    }
-    const circleAt = (event: Event) => {
-      const t = event.target as Element | null
-      if (!t || t.tagName !== 'circle') return null
-      return d3.select<SVGCircleElement, SimNode>(t as SVGCircleElement)
-    }
-
-    linksGroup
-      .on('mouseover', (event: MouseEvent) => {
-        const sel = linkAt(event)
-        if (!sel) return
-        const d = sel.datum()
-        sel
-          .transition()
-          .duration(HOVER_TRANSITION_MS)
-          .attr('stroke-opacity', 1)
-          .attr('stroke-width', 1.5)
-        highlightNodeCircle(nodesGroup, d.target.data)
-        showTooltip(event, d.target.data)
-        hoveredGraphPath.value = d.target.key
-      })
-      .on('mousemove', (event: MouseEvent) => {
-        const sel = linkAt(event)
-        if (!sel) return
-        showTooltip(event, sel.datum().target.data)
-      })
-      .on('mouseout', (event: MouseEvent) => {
-        const sel = linkAt(event)
-        if (!sel) return
-        const d = sel.datum()
-        sel
-          .transition()
-          .duration(HOVER_TRANSITION_MS)
-          .attr('stroke-opacity', LINK_BASE_OPACITY)
-          .attr('stroke-width', 1)
-        unhighlightNodeCircle(nodesGroup, d.target.data)
-        hideTooltip()
-        hoveredGraphPath.value = null
-      })
-
-    nodesGroup
-      .on('mouseover', (event: MouseEvent) => {
-        const sel = circleAt(event)
-        if (!sel) return
-        const d = sel.datum()
-        sel
-          .transition()
-          .duration(HOVER_TRANSITION_MS)
-          .attr('r', d.r * HOVER_SCALE)
-        highlightParentLink(linksGroup, d.data)
-        showTooltip(event, d.data)
-        hoveredGraphPath.value = d.key
-      })
-      .on('mousemove', (event: MouseEvent) => {
-        const sel = circleAt(event)
-        if (!sel) return
-        showTooltip(event, sel.datum().data)
-      })
-      .on('mouseout', (event: MouseEvent) => {
-        const sel = circleAt(event)
-        if (!sel) return
-        const d = sel.datum()
-        sel.transition().duration(HOVER_TRANSITION_MS).attr('r', d.r)
-        unhighlightParentLink(linksGroup, d.data)
-        hideTooltip()
-        hoveredGraphPath.value = null
-      })
-      .on('click', (event: MouseEvent) => {
-        const sel = circleAt(event)
-        if (!sel) return
-        event.stopPropagation()
-        const d = sel.datum()
-
-        // Clicking a 'more' bubble reveals the folder it stands for, and keeps
-        // it revealed across snapshots.
-        if (d.data.type === 'more') {
-          expandedFolders.add(d.parentKey ?? '')
-          hideTooltip()
-          updateTree()
-          return
-        }
-
-        showTooltip(event, d.data)
-        onNodeClick(d.key)
-      })
+    requestDraw()
   }
 
   function initGource() {
     if (!diagramContainer.value || !fileTree.value) return
 
     const container = diagramContainer.value
-    const width = container.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = resolveHeight(container)
-    centerX = width / 2
-    centerY = height / 2
-
     d3.select(container).selectAll('*').remove()
     nodeByKey.clear()
-    nodeSel = null
-    linkSel = null
+    transform = d3.zoomIdentity
+    hovered = null
+    externalKey = null
 
-    const svg = d3
+    measure()
+
+    const sel = d3
       .select(container)
-      .append('svg')
-      .attr('width', width)
-      .attr('height', height)
-      .attr('viewBox', [0, 0, width, height])
-      // Cheaper rasterization for thousands of small circles.
-      .style('shape-rendering', 'optimizeSpeed')
+      .append('canvas')
+      .style('display', 'block')
+      .style('touch-action', 'none')
 
-    const g = svg.append('g')
+    canvas = sel.node() as HTMLCanvasElement
+    canvasSel = sel as d3.Selection<HTMLCanvasElement, unknown, null, undefined>
+    ctx = canvas.getContext('2d')
+    resizeCanvas()
 
     zoomBehavior = d3
-      .zoom<SVGSVGElement, unknown>()
+      .zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.2, 10])
       .on('zoom', (event) => {
-        g.attr('transform', event.transform)
+        transform = event.transform
+        requestDraw()
       })
-    svg.call(zoomBehavior)
-    svg.style('touch-action', 'none')
-    svgRoot = svg
+    canvasSel.call(zoomBehavior)
 
-    const linksGroup = g.append('g').attr('class', 'links')
-    const nodesGroup = g.append('g').attr('class', 'nodes')
-
-    bindDelegatedEvents(linksGroup, nodesGroup)
-    renderGraph(linksGroup, nodesGroup)
+    bindEvents(canvas)
+    render()
   }
 
   function retryInitGource(attempts = 0) {
@@ -566,88 +579,38 @@ export function useDiagramRenderer(
 
   function updateTree() {
     if (!diagramContainer.value) return
-
-    const svg = d3.select(diagramContainer.value).select('svg')
-    if (svg.empty()) {
+    if (!canvas) {
       initGource()
       return
     }
 
-    const g = svg.select<SVGGElement>('g')
-    const linksGroup = g.select<SVGGElement>('.links')
-    const nodesGroup = g.select<SVGGElement>('.nodes')
-
-    const width = diagramContainer.value.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = resolveHeight(diagramContainer.value)
-    centerX = width / 2
-    centerY = height / 2
-
-    // Keep the svg viewport in sync with the container (resize / expand toggle).
-    svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height].join(' '))
-
-    renderGraph(linksGroup, nodesGroup)
-  }
-
-  function getDiagramGroups() {
-    if (!diagramContainer.value) return null
-    const svg = d3.select(diagramContainer.value).select<SVGSVGElement>('svg')
-    if (svg.empty()) return null
-    const g = svg.select<SVGGElement>('g')
-    const linksGroup = g.select<SVGGElement>('.links')
-    const nodesGroup = g.select<SVGGElement>('.nodes')
-    if (linksGroup.empty() || nodesGroup.empty()) return null
-    return { linksGroup, nodesGroup }
+    measure()
+    resizeCanvas()
+    render()
   }
 
   function highlightByPath(path: string) {
-    const groups = getDiagramGroups()
-    if (!groups) return
-    const { linksGroup, nodesGroup } = groups
-
-    nodesGroup
-      .selectAll<SVGGElement, SimNode>('g')
-      .filter((d) => d.key === path)
-      .each(function (d) {
-        d3.select(this)
-          .select<SVGCircleElement>('circle.main')
-          .transition()
-          .duration(HOVER_TRANSITION_MS)
-          .attr('r', d.r * HOVER_SCALE)
-        highlightParentLink(linksGroup, d.data)
-      })
+    externalKey = path
+    requestDraw()
   }
 
   function unhighlightByPath(path: string) {
-    const groups = getDiagramGroups()
-    if (!groups) return
-    const { linksGroup, nodesGroup } = groups
-
-    nodesGroup
-      .selectAll<SVGGElement, SimNode>('g')
-      .filter((d) => d.key === path)
-      .each(function (d) {
-        d3.select(this)
-          .select<SVGCircleElement>('circle.main')
-          .transition()
-          .duration(HOVER_TRANSITION_MS)
-          .attr('r', d.r)
-        unhighlightParentLink(linksGroup, d.data)
-      })
+    if (externalKey !== path) return
+    externalKey = null
+    requestDraw()
   }
 
   function zoomToPath(path: string) {
-    if (!svgRoot || !zoomBehavior || !diagramContainer.value) return
+    if (!canvasSel || !zoomBehavior) return
 
     const target = nodeByKey.get(path)
     if (!target || target.x === undefined || target.y === undefined) return
 
-    const width = diagramContainer.value.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    const height = resolveHeight(diagramContainer.value)
     const scale = 2.5
     const tx = width / 2 - target.x * scale
     const ty = height / 2 - target.y * scale
 
-    svgRoot
+    canvasSel
       .transition()
       .duration(700)
       .ease(d3.easeCubicInOut)
@@ -658,9 +621,21 @@ export function useDiagramRenderer(
   function destroyRenderer() {
     simulation?.stop()
     simulation = null
+    if (drawFrame !== null) cancelAnimationFrame(drawFrame)
+    drawFrame = null
     nodeByKey.clear()
-    nodeSel = null
-    linkSel = null
+    linkByTarget.clear()
+    nodes = []
+    links = []
+    moreNodes = []
+    nodeBatches = []
+    linkBatches = []
+    enterNodeBatches = []
+    enterLinkBatches = []
+    quadtree = null
+    canvas = null
+    canvasSel = null
+    ctx = null
   }
 
   return {

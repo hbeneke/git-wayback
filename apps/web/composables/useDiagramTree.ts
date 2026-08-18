@@ -45,11 +45,8 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-/**
- * Rendered file bubbles are budgeted: past this many the graph is thinned per
- * folder. Folders are never dropped, so the shape of the repo survives.
- */
-export const RENDER_FILE_BUDGET = 1200
+/** Budget of drawn file bubbles; past it the graph is thinned per folder, folders never dropped. */
+export const RENDER_FILE_BUDGET = 4000
 
 export const EXTENSION_COLORS: Record<string, string> = {
   ts: '#3178c6',
