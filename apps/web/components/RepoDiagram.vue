@@ -229,11 +229,9 @@
               </button>
             </div>
 
-            <!-- Files panel (left) -->
-            <!-- Expanded keeps clear of the controls now floating over the graph. -->
+            <!-- Files panel (left). Height stops short of the floating controls. -->
             <div
-              class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 left-3 w-[220px] flex flex-col"
-              :class="expanded ? 'max-h-[calc(100%-104px)]' : 'max-h-[calc(100%-24px)]'"
+              class="absolute top-3 z-20 bg-bg/90 backdrop-blur border border-[rgb(var(--border))] rounded py-2 px-2.5 left-3 w-[220px] max-h-[calc(100%-104px)] flex flex-col"
               @pointerdown.stop
               @click.stop
             >
@@ -297,12 +295,9 @@
             </div>
           </div>
 
-          <!-- Controls. Expanded floats them over the graph so it keeps the full height. -->
+          <!-- Controls float over the graph, unpainted, so the blur has something behind it. -->
           <div
-            class="px-4 py-3 border-t border-[rgb(var(--border))] z-20"
-            :class="expanded
-              ? 'absolute inset-x-0 bottom-0 bg-[rgb(var(--bg))]/70 backdrop-blur'
-              : 'relative'"
+            class="absolute inset-x-0 bottom-0 z-20 px-4 py-3 border-t border-[rgb(var(--border))] backdrop-blur-sm"
           >
             <div class="flex items-center gap-3">
               <button
