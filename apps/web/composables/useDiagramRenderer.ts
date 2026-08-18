@@ -107,8 +107,8 @@ export function useDiagramRenderer(
   let ctx: CanvasRenderingContext2D | null = null
   let zoomBehavior: d3.ZoomBehavior<HTMLCanvasElement, unknown> | null = null
   let transform = d3.zoomIdentity
-  let width = DIAGRAM.DEFAULT_WIDTH
-  let height = DIAGRAM.HEIGHT
+  let width: number = DIAGRAM.DEFAULT_WIDTH
+  let height: number = DIAGRAM.HEIGHT
   let centerX = width / 2
   let centerY = height / 2
 
