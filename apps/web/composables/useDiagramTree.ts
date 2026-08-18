@@ -235,6 +235,25 @@ function parseRgb(color: string): [number, number, number] | null {
   return null
 }
 
+// Blends of a tiny palette, so every result is worth keeping.
+const mixCache = new Map<string, string>()
+
+/** Blends `a` into `b` by `t` (0..1). */
+export function mixColors(a: string, b: string, t: number): string {
+  const key = `${a}|${b}|${t}`
+  const hit = mixCache.get(key)
+  if (hit) return hit
+
+  const ca = parseRgb(a)
+  const cb = parseRgb(b)
+  const out =
+    ca && cb
+      ? `rgb(${Math.round(ca[0] + (cb[0] - ca[0]) * t)}, ${Math.round(ca[1] + (cb[1] - ca[1]) * t)}, ${Math.round(ca[2] + (cb[2] - ca[2]) * t)})`
+      : b
+  mixCache.set(key, out)
+  return out
+}
+
 export function darken(color: string, factor: number): string {
   const rgb = parseRgb(color)
   if (!rgb) return color

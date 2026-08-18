@@ -8,6 +8,7 @@ import {
   getExtensionColor,
   getFileKind,
   getNodeColor,
+  mixColors,
   RENDER_FILE_BUDGET,
 } from './useDiagramTree'
 
@@ -16,8 +17,17 @@ const TAU = Math.PI * 2
 const HOVER_SCALE = 2.2
 const HOVER_MS = 160
 const LINK_BASE_ALPHA = 0.35
+/** Steps a link is split into to fake a gradient while staying batched. */
+const LINK_SEGMENTS = 6
 /** Screen-space slack around the cursor when picking a node. */
 const HIT_RADIUS_PX = 10
+
+/** Thin rims: a flat 1px swallowed most of a 2px-radius file bubble. */
+function rimWidth(r: number): number {
+  const w = Math.min(1.1, Math.max(0.4, r * 0.22))
+  // Quantized so nodes still share draw batches.
+  return Math.round(w * 4) / 4
+}
 
 // Faster than d3 defaults so the graph settles well inside the playback interval.
 const SIM_ALPHA_DECAY = 0.055
@@ -50,6 +60,7 @@ interface SimNode extends d3.SimulationNodeDatum {
   fill: string
   stroke: string
   dashed: boolean
+  rim: number
   /** Batch key — nodes sharing one are drawn as a single canvas path. */
   style: string
 }
@@ -58,7 +69,14 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
   key: string
   source: SimNode
   target: SimNode
-  color: string
+  from: string
+  to: string
+}
+
+/** Links sharing an endpoint-color pair, plus the ramp they are drawn with. */
+interface LinkBatch {
+  links: SimLink[]
+  ramp: string[]
 }
 
 export function useDiagramRenderer(
@@ -105,9 +123,9 @@ export function useDiagramRenderer(
 
   // Draw batches: one canvas path per color instead of one element per bubble.
   let nodeBatches: SimNode[][] = []
-  let linkBatches: SimLink[][] = []
+  let linkBatches: LinkBatch[] = []
   let enterNodeBatches: SimNode[][] = []
-  let enterLinkBatches: SimLink[][] = []
+  let enterLinkBatches: LinkBatch[] = []
   let enterStart = 0
   let entering = false
 
@@ -174,14 +192,24 @@ export function useDiagramRenderer(
     return [...byStyle.values()]
   }
 
-  function batchLinks(list: SimLink[]): SimLink[][] {
-    const byColor = new Map<string, SimLink[]>()
+  // Grouped by endpoint-color pair: the palette is small, so a few dozen
+  // batches cover every link and each keeps a single stroke per segment.
+  function batchLinks(list: SimLink[]): LinkBatch[] {
+    const byPair = new Map<string, LinkBatch>()
     for (const l of list) {
-      const bucket = byColor.get(l.color)
-      if (bucket) bucket.push(l)
-      else byColor.set(l.color, [l])
+      const key = `${l.from}|${l.to}`
+      const bucket = byPair.get(key)
+      if (bucket) {
+        bucket.links.push(l)
+        continue
+      }
+      const ramp: string[] = []
+      for (let i = 0; i < LINK_SEGMENTS; i++) {
+        ramp.push(mixColors(l.from, l.to, (i + 0.5) / LINK_SEGMENTS))
+      }
+      byPair.set(key, { links: [l], ramp })
     }
-    return [...byColor.values()]
+    return [...byPair.values()]
   }
 
   /** Rebuilds nodes/links for the current snapshot, reusing surviving bodies. */
@@ -227,19 +255,17 @@ export function useDiagramRenderer(
       if (!node) {
         // New bubbles spawn on their parent with jitter so they push outwards.
         const parent = parentKey ? nodeByKey.get(parentKey) : null
-        const fill = fillFor(d.data, d.depth)
-        const stroke = strokeFor(getNodeColor(d.data))
-        const dashed = d.data.type === 'more'
         node = {
           key,
           data: d.data,
           depth: d.depth,
           r: 1,
           parentKey,
-          fill,
-          stroke,
-          dashed,
-          style: `${fill}|${stroke}|${dashed ? 1 : 0}`,
+          fill: fillFor(d.data, d.depth),
+          stroke: strokeFor(getNodeColor(d.data)),
+          dashed: d.data.type === 'more',
+          rim: 0.5,
+          style: '',
           x: (parent?.x ?? centerX) + (Math.random() - 0.5) * 20,
           y: (parent?.y ?? centerY) + (Math.random() - 0.5) * 20,
         }
@@ -250,7 +276,10 @@ export function useDiagramRenderer(
       node.data = d.data
       node.depth = d.depth
       node.parentKey = parentKey
+      // Radius tracks file size and 'more' counts, so the rim follows it.
       node.r = getNodeRadius(d)
+      node.rim = rimWidth(node.r)
+      node.style = `${node.fill}|${node.stroke}|${node.dashed ? 1 : 0}|${node.rim}`
       next.push(node)
       if (d.data.type === 'more') moreNodes.push(node)
     }
@@ -272,7 +301,8 @@ export function useDiagramRenderer(
         key: `${source.key}->${node.key}`,
         source,
         target: node,
-        color: getNodeColor(node.data),
+        from: getNodeColor(source.data),
+        to: getNodeColor(node.data),
       }
       nextLinks.push(link)
       linkByTarget.set(node.key, link)
@@ -360,21 +390,30 @@ export function useDiagramRenderer(
     c.fillStyle = first.fill
     c.fill()
     c.strokeStyle = first.stroke
-    c.lineWidth = first.dashed ? 1.2 : 1
+    c.lineWidth = first.rim
     if (first.dashed) c.setLineDash([2, 2])
     c.stroke()
     if (first.dashed) c.setLineDash([])
   }
 
-  function paintLinkBatch(c: CanvasRenderingContext2D, batch: SimLink[]) {
-    c.beginPath()
-    for (const l of batch) {
-      c.moveTo(l.source.x ?? 0, l.source.y ?? 0)
-      c.lineTo(l.target.x ?? 0, l.target.y ?? 0)
-    }
-    c.strokeStyle = batch[0].color
+  // One pass per ramp step: the segments blend source color into target color.
+  function paintLinkBatch(c: CanvasRenderingContext2D, batch: LinkBatch) {
     c.lineWidth = 1
-    c.stroke()
+    for (let i = 0; i < LINK_SEGMENTS; i++) {
+      const t0 = i / LINK_SEGMENTS
+      const t1 = (i + 1) / LINK_SEGMENTS
+      c.beginPath()
+      for (const l of batch.links) {
+        const sx = l.source.x ?? 0
+        const sy = l.source.y ?? 0
+        const dx = (l.target.x ?? 0) - sx
+        const dy = (l.target.y ?? 0) - sy
+        c.moveTo(sx + dx * t0, sy + dy * t0)
+        c.lineTo(sx + dx * t1, sy + dy * t1)
+      }
+      c.strokeStyle = batch.ramp[i]
+      c.stroke()
+    }
   }
 
   function draw() {
@@ -433,12 +472,20 @@ export function useDiagramRenderer(
       const eased = t * (2 - t)
       const r = focus.r * (1 + (HOVER_SCALE - 1) * eased)
 
+      // Only one link is ever highlighted, so a real gradient is affordable here.
       const link = linkByTarget.get(focus.key)
       if (link) {
+        const sx = link.source.x ?? 0
+        const sy = link.source.y ?? 0
+        const tx = link.target.x ?? 0
+        const ty = link.target.y ?? 0
+        const grad = c.createLinearGradient(sx, sy, tx, ty)
+        grad.addColorStop(0, link.from)
+        grad.addColorStop(1, link.to)
         c.beginPath()
-        c.moveTo(link.source.x ?? 0, link.source.y ?? 0)
-        c.lineTo(link.target.x ?? 0, link.target.y ?? 0)
-        c.strokeStyle = link.color
+        c.moveTo(sx, sy)
+        c.lineTo(tx, ty)
+        c.strokeStyle = grad
         c.lineWidth = 1.5
         c.stroke()
       }
@@ -449,7 +496,7 @@ export function useDiagramRenderer(
       c.fillStyle = focus.fill
       c.fill()
       c.strokeStyle = focus.stroke
-      c.lineWidth = 1
+      c.lineWidth = rimWidth(r)
       c.stroke()
     }
 
