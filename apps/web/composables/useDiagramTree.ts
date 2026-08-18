@@ -102,9 +102,7 @@ export function buildTree(files: FileNode[], rootName: string): TreeNode {
     children: [],
   }
 
-  // Folders are looked up by full path rather than scanned out of the parent's
-  // children: the scan was linear in the width of the folder, so a repo with a
-  // few wide directories cost O(files x siblings) to build.
+  // Path-keyed lookup; scanning parent.children was O(files x siblings).
   const folders = new Map<string, TreeNode>([['', root]])
 
   for (const file of files) {

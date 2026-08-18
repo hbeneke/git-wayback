@@ -397,7 +397,8 @@ watch(
   }
 )
 
-const snapshots = ref<TagSnapshot[]>([])
+// Shallow: deep-proxying ~150k file objects costs more than it buys.
+const snapshots = shallowRef<TagSnapshot[]>([])
 const repoName = ref('')
 const currentIndex = ref(0)
 const started = ref(false)
@@ -409,7 +410,8 @@ const hoveredIndex = ref<number | null>(null)
 const messageExpanded = ref(false)
 const expanded = ref(false)
 const headerOffset = ref(56)
-const tooltip = ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
+// Shallow: rewritten wholesale on every mousemove.
+const tooltip = shallowRef<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
   visible: false, x: 0, y: 0, name: '', dir: '', kind: '',
 })
 
@@ -452,8 +454,9 @@ function seekTo(i: number) {
   playbackStarted.value = true
   currentIndex.value = i
 }
+// Renderer shares this tree instead of rebuilding it — one buildTree per snapshot.
 const { collapsedFiles, initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath, destroyRenderer } = useDiagramRenderer(
-  diagramContainer, currentSnapshot, repoName, hiddenExtensions, tooltip, hoveredGraphPath,
+  diagramContainer, fileTreeRoot, hiddenExtensions, tooltip, hoveredGraphPath,
   onGraphNodeClick, expanded,
 )
 
@@ -517,7 +520,7 @@ async function loadEvolution() {
       },
     })
 
-    snapshots.value = response.snapshots
+    snapshots.value = markRaw(response.snapshots)
     repoName.value = response.repoName
 
     if (snapshots.value.length > 0) {

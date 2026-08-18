@@ -1,8 +1,7 @@
 import { D3_EXIT_TRANSITION_DURATION_MS, DIAGRAM } from '@git-wayback/shared'
 import * as d3 from 'd3'
-import type { TagSnapshot, TreeNode } from './useDiagramTree'
+import type { TreeNode } from './useDiagramTree'
 import {
-  buildTree,
   collapseTree,
   darken,
   EXTENSION_COLORS,
@@ -58,8 +57,8 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
 
 export function useDiagramRenderer(
   diagramContainer: Ref<HTMLElement | null>,
-  currentSnapshot: ComputedRef<TagSnapshot | undefined>,
-  repoName: Ref<string>,
+  /** Full tree for the current snapshot, built once by the owning component. */
+  fileTree: ComputedRef<TreeNode | null>,
   hiddenExtensions: Ref<Set<string>>,
   tooltip: Ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>,
   hoveredGraphPath: Ref<string | null>,
@@ -123,6 +122,11 @@ export function useDiagramRenderer(
       dir,
       kind: getFileKind(data),
     }
+  }
+
+  function hideTooltip() {
+    if (!tooltip.value.visible) return
+    tooltip.value = { ...tooltip.value, visible: false }
   }
 
   function highlightParentLink(
@@ -191,15 +195,11 @@ export function useDiagramRenderer(
    * their parent with a little jitter so they visibly push outwards from it.
    */
   function buildGraph(): { nodes: SimNode[]; links: SimLink[] } {
-    if (!currentSnapshot.value) return { nodes: [], links: [] }
+    if (!fileTree.value) return { nodes: [], links: [] }
 
     // Thin the tree first: on a big repo most of the cost is simply the number
     // of elements the simulation and the DOM have to carry.
-    const tree = collapseTree(
-      buildTree(currentSnapshot.value.files, repoName.value),
-      RENDER_FILE_BUDGET,
-      expandedFolders,
-    )
+    const tree = collapseTree(fileTree.value, RENDER_FILE_BUDGET, expandedFolders)
     const root = d3.hierarchy(tree)
     const descendants = root.descendants()
 
@@ -462,7 +462,7 @@ export function useDiagramRenderer(
           .attr('stroke-opacity', LINK_BASE_OPACITY)
           .attr('stroke-width', 1)
         unhighlightNodeCircle(nodesGroup, d.target.data)
-        tooltip.value.visible = false
+        hideTooltip()
         hoveredGraphPath.value = null
       })
 
@@ -490,7 +490,7 @@ export function useDiagramRenderer(
         const d = sel.datum()
         sel.transition().duration(HOVER_TRANSITION_MS).attr('r', d.r)
         unhighlightParentLink(linksGroup, d.data)
-        tooltip.value.visible = false
+        hideTooltip()
         hoveredGraphPath.value = null
       })
       .on('click', (event: MouseEvent) => {
@@ -503,7 +503,7 @@ export function useDiagramRenderer(
         // it revealed across snapshots.
         if (d.data.type === 'more') {
           expandedFolders.add(d.parentKey ?? '')
-          tooltip.value.visible = false
+          hideTooltip()
           updateTree()
           return
         }
@@ -514,7 +514,7 @@ export function useDiagramRenderer(
   }
 
   function initGource() {
-    if (!diagramContainer.value || !currentSnapshot.value) return
+    if (!diagramContainer.value || !fileTree.value) return
 
     const container = diagramContainer.value
     const width = container.clientWidth || DIAGRAM.DEFAULT_WIDTH
@@ -556,7 +556,7 @@ export function useDiagramRenderer(
   }
 
   function retryInitGource(attempts = 0) {
-    if (!diagramContainer.value || !currentSnapshot.value) return
+    if (!diagramContainer.value || !fileTree.value) return
     if (diagramContainer.value.clientWidth === 0 && attempts < 10) {
       requestAnimationFrame(() => retryInitGource(attempts + 1))
       return
