@@ -133,19 +133,24 @@ export function buildTree(files: FileNode[], rootName: string): TreeNode {
   return root
 }
 
-function countFiles(node: TreeNode): number {
-  if (node.type === 'file') return 1
-  let n = 0
-  for (const c of node.children) n += countFiles(c)
-  return n
-}
+/** Total files and how many folders hold at least one, in a single walk. */
+function measureTree(node: TreeNode): { files: number; fileFolders: number } {
+  let files = 0
+  let fileFolders = 0
+  let holdsFiles = false
 
-/** Folders holding at least one direct file — the ones a per-folder cap applies to. */
-function countFileHoldingFolders(node: TreeNode): number {
-  if (node.type !== 'folder') return 0
-  let n = node.children.some((c) => c.type === 'file') ? 1 : 0
-  for (const c of node.children) n += countFileHoldingFolders(c)
-  return n
+  for (const c of node.children) {
+    if (c.type === 'file') {
+      files++
+      holdsFiles = true
+    } else if (c.type === 'folder') {
+      const m = measureTree(c)
+      files += m.files
+      fileFolders += m.fileFolders
+    }
+  }
+
+  return { files, fileFolders: holdsFiles ? fileFolders + 1 : fileFolders }
 }
 
 function collapseNode(node: TreeNode, perFolder: number, keepExpanded: Set<string>): TreeNode {
@@ -182,20 +187,15 @@ function collapseNode(node: TreeNode, perFolder: number, keepExpanded: Set<strin
   }
 }
 
-/**
- * Thins the tree so the renderer stays under `budget` file bubbles: each folder
- * keeps its largest files and gets one 'more' node for the rest. Folders in
- * `keepExpanded` are left whole (the user clicked their 'more' node).
- * Returns the tree untouched when it already fits.
- */
+/** Thins the tree to `budget` bubbles: each folder keeps its largest files plus one 'more' node. */
 export function collapseTree(
   root: TreeNode,
   budget = RENDER_FILE_BUDGET,
   keepExpanded: Set<string> = new Set(),
 ): TreeNode {
-  if (countFiles(root) <= budget) return root
-  const folders = Math.max(countFileHoldingFolders(root), 1)
-  const perFolder = Math.max(2, Math.floor(budget / folders))
+  const { files, fileFolders } = measureTree(root)
+  if (files <= budget) return root
+  const perFolder = Math.max(2, Math.floor(budget / Math.max(fileFolders, 1)))
   return collapseNode(root, perFolder, keepExpanded)
 }
 

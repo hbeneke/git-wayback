@@ -77,6 +77,9 @@ export function useDiagramRenderer(
 
   // Folders whose 'more' bubble the user clicked — rendered in full from then on.
   const expandedFolders = new Set<string>()
+  let expandedVersion = 0
+  // Resize and legend toggles re-render without changing the tree; reuse the collapse.
+  let collapsed: { src: TreeNode; version: number; out: TreeNode } | null = null
   /** Files currently folded into 'more' bubbles; 0 when the whole tree is drawn. */
   const collapsedFiles = ref(0)
 
@@ -190,8 +193,16 @@ export function useDiagramRenderer(
     }
 
     // Thin first: on a big repo the cost is simply the number of bodies carried.
-    const tree = collapseTree(fileTree.value, RENDER_FILE_BUDGET, expandedFolders)
-    const root = d3.hierarchy(tree)
+    const src = fileTree.value
+    if (!collapsed || collapsed.src !== src || collapsed.version !== expandedVersion) {
+      collapsed = {
+        src,
+        version: expandedVersion,
+        out: collapseTree(src, RENDER_FILE_BUDGET, expandedFolders),
+      }
+    }
+
+    const root = d3.hierarchy(collapsed.out)
     const descendants = root.descendants()
 
     collapsedFiles.value = descendants.reduce(
@@ -493,6 +504,7 @@ export function useDiagramRenderer(
       // A 'more' bubble expands its folder, and stays expanded across snapshots.
       if (node.data.type === 'more') {
         expandedFolders.add(node.parentKey ?? '')
+        expandedVersion++
         setHovered(null)
         hideTooltip()
         updateTree()
@@ -633,6 +645,7 @@ export function useDiagramRenderer(
     enterNodeBatches = []
     enterLinkBatches = []
     quadtree = null
+    collapsed = null
     canvas = null
     canvasSel = null
     ctx = null
