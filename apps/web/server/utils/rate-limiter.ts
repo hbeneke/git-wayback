@@ -32,6 +32,25 @@ export const RATE_LIMITS = {
     windowSec: 60,
     prefix: 'evolution',
   },
+  /**
+   * Forced cache refresh, per IP. Every one of these skips the cache and costs
+   * real GitHub quota, so it is the strictest per-client budget in the app.
+   */
+  refresh: {
+    maxRequests: 5,
+    windowSec: 3600,
+    prefix: 'refresh',
+  },
+  /**
+   * Forced cache refresh, counted across every client at once (fixed identity).
+   * The per-IP budget alone is meaningless against a botnet; this is the hard
+   * ceiling on how much of the hourly GitHub quota forced refreshes can burn.
+   */
+  refreshGlobal: {
+    maxRequests: 60,
+    windowSec: 3600,
+    prefix: 'refresh-global',
+  },
   /** Visit tracking (strict to prevent ranking inflation) */
   visits: {
     maxRequests: 5,
@@ -90,9 +109,14 @@ function unavailable(): never {
   })
 }
 
+/**
+ * `identity` overrides the per-IP bucket key. Passing a constant turns the
+ * limiter into a global budget shared by every caller.
+ */
 export async function applyRateLimit(
   event: H3Event,
   config: RateLimitConfig = RATE_LIMITS.api,
+  identity?: string,
 ): Promise<void> {
   const limiter = getLimiter(config)
 
@@ -103,16 +127,16 @@ export async function applyRateLimit(
     return
   }
 
-  const ip = getTrustedClientIp(event)
+  const key = identity ?? getTrustedClientIp(event)
 
   let success: boolean
   let remaining: number
   let reset: number
 
   try {
-    ;({ success, remaining, reset } = await limiter.limit(ip))
+    ;({ success, remaining, reset } = await limiter.limit(key))
   } catch (err) {
-    logger.rateLimit.error(`Limiter "${config.prefix}" failed for ${ip}`, err)
+    logger.rateLimit.error(`Limiter "${config.prefix}" failed for ${key}`, err)
     if (isProduction() && !config.failOpen) unavailable()
     return
   }

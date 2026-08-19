@@ -123,6 +123,10 @@ export async function getRepoOverview(owner: string, repo: string) {
       date: c.commit.author.date,
     })),
 
+    // When this payload was built. Cached responses carry the original value,
+    // which is what the UI shows as the data's age.
+    fetchedAt: new Date().toISOString(),
+
     branches: branches.map((b) => b.name),
     branchCount: branches.length,
 

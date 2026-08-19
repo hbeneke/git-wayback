@@ -9,6 +9,10 @@ export default defineCachedEventHandler(
   async (event) => {
     const { owner, repo } = validateRepoParams(event)
 
+    // A forced refresh must not be parked in the CDN, or the next click would
+    // be answered with the copy it was trying to replace.
+    if (isForcedRefresh(event)) setHeader(event, 'Cache-Control', 'no-store')
+
     return getRepoOverview(owner, repo)
   },
   {
@@ -16,5 +20,16 @@ export default defineCachedEventHandler(
     swr: true,
     group: 'nitro/routes',
     name: 'repo-overview',
+    // Keyed on the repo alone. The default key folds in the query string, so
+    // "?refresh=1" would otherwise write a second entry and leave the one every
+    // other visitor reads untouched.
+    getKey: (event) => {
+      const { owner, repo } = validateRepoParams(event)
+      return `${owner}:${repo}`.toLowerCase()
+    },
+    // Invalidate rather than bypass: the refreshed value replaces the shared
+    // entry, so one click updates the repo for everyone. Rate limiting for this
+    // happens in the middleware, before the handler runs.
+    shouldInvalidateCache: (event) => isForcedRefresh(event),
   },
 )

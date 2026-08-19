@@ -14,6 +14,10 @@ export const evolutionSnapshots = pgTable('evolution_snapshots', {
   snapshots: jsonb('snapshots').notNull().$type<EvolutionSnapshotData[]>(),
   // When this data was last fetched from GitHub
   capturedAt: timestamp('captured_at').notNull().defaultNow(),
+  // Repo `pushed_at` at capture time. Unchanged value means no new commits, so
+  // the row is still correct and can be served without refetching. Nullable:
+  // rows captured before this column existed have no value.
+  pushedAt: timestamp('pushed_at'),
   // Number of tags captured
   tagCount: integer('tag_count').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),

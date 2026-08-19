@@ -3,8 +3,10 @@ import {
   EVOLUTION,
   EVOLUTION_CACHE_DURATION_MS,
   EVOLUTION_MAX_CACHE_BYTES,
+  EVOLUTION_REVALIDATE_FLOOR_MS,
   type EvolutionSampling,
   type EvolutionSource,
+  FORCE_REFRESH_MIN_AGE_MS,
   GITHUB_API,
 } from '@git-wayback/shared'
 import { eq } from 'drizzle-orm'
@@ -162,6 +164,11 @@ async function fetchFromGitHub(
 export default defineEventHandler(async (event) => {
   const { owner, repo } = validateRepoParams(event)
   const query = getQuery(event)
+  const forceRefresh = isForcedRefresh(event)
+
+  // Never let a CDN keep a forced-refresh response: the whole point is that it
+  // is computed fresh, and a cached copy would hand out free bypasses.
+  if (forceRefresh) setHeader(event, 'Cache-Control', 'no-store')
 
   const source: EvolutionSource = EVOLUTION.SOURCES.includes(query.source as EvolutionSource)
     ? (query.source as EvolutionSource)
@@ -193,10 +200,17 @@ export default defineEventHandler(async (event) => {
       message: `Invalid branch ref: "${branch}".`,
     })
   }
+  // At most one getRepo per request: the default-branch lookup and the
+  // pushed_at revalidation below both want it.
+  let repoInfo: ReturnType<typeof github.getRepo> | null = null
+  const loadRepoInfo = () => {
+    repoInfo ??= github.getRepo(owner, repo)
+    return repoInfo
+  }
+
   if (source === 'commits' && !branch) {
     try {
-      const repoInfo = await github.getRepo(owner, repo)
-      branch = repoInfo.default_branch
+      branch = (await loadRepoInfo()).default_branch
     } catch {
       branch = 'main'
     }
@@ -217,13 +231,14 @@ export default defineEventHandler(async (event) => {
       .limit(1)
 
     if (cached.length > 0) {
-      const cacheAge = Date.now() - new Date(cached[0].capturedAt).getTime()
+      const row = cached[0]
+      const cacheAge = Date.now() - new Date(row.capturedAt).getTime()
 
-      if (cacheAge < EVOLUTION_CACHE_DURATION_MS) {
+      const serveCached = () => {
         logger.evolution.debug(`Cache hit for ${cacheKey}`, {
           ageMinutes: Math.round(cacheAge / 1000 / 60),
         })
-        const snaps = cached[0].snapshots as EvolutionSnapshotData[]
+        const snaps = row.snapshots as EvolutionSnapshotData[]
         return {
           snapshots: snaps,
           repoName: repo,
@@ -232,11 +247,57 @@ export default defineEventHandler(async (event) => {
           sampling,
           poolSize: snaps.length,
           cached: true,
-          capturedAt: cached[0].capturedAt,
+          capturedAt: row.capturedAt,
         }
       }
 
-      logger.evolution.info(`Cache expired for ${cacheKey}, refreshing...`)
+      // A forced refresh is honoured only once the row has had a moment to
+      // settle, so a double-click cannot turn into two full re-fetches.
+      const forcing = forceRefresh && cacheAge >= FORCE_REFRESH_MIN_AGE_MS
+
+      if (forcing) {
+        logger.evolution.info(`Forced refresh for ${cacheKey}`)
+      } else if (cacheAge < EVOLUTION_REVALIDATE_FLOOR_MS) {
+        return serveCached()
+      } else {
+        // Revalidate against the repo's pushed_at instead of a clock: no push
+        // since capture means the snapshots are still exactly right, and the
+        // check costs one cheap call rather than a full re-fetch.
+        // null = could not tell (row predates the column, or GitHub failed).
+        let unchanged: boolean | null = null
+
+        if (row.pushedAt) {
+          try {
+            const info = await loadRepoInfo()
+            unchanged =
+              new Date(info.pushed_at).getTime() === new Date(row.pushedAt).getTime()
+          } catch (err) {
+            logger.evolution.warn(`pushed_at check failed for ${cacheKey}`, err)
+          }
+        }
+
+        if (unchanged === true) {
+          // Bump capturedAt so the following requests fall under the floor and
+          // skip even this call. Best-effort: a failed write only costs a check.
+          try {
+            await db
+              .update(evolutionSnapshots)
+              .set({ capturedAt: new Date() })
+              .where(eq(evolutionSnapshots.id, cacheKey))
+          } catch (err) {
+            logger.evolution.warn(`capturedAt bump failed for ${cacheKey}`, err)
+          }
+
+          return serveCached()
+        }
+
+        // Nothing to compare against: fall back to the plain TTL.
+        if (unchanged === null && cacheAge < EVOLUTION_CACHE_DURATION_MS) {
+          return serveCached()
+        }
+
+        logger.evolution.info(`Cache stale for ${cacheKey}, refreshing...`)
+      }
     }
   } catch (err) {
     logger.evolution.warn(`Cache read failed for ${cacheKey}, fetching live`, err)
@@ -255,6 +316,14 @@ export default defineEventHandler(async (event) => {
     )
   } else if (pool.length > 0) {
     const now = new Date()
+    // Stamped with the repo state this pool was built from; the next request
+    // compares against it instead of re-fetching on a timer.
+    let pushedAt: Date | null = null
+    try {
+      pushedAt = new Date((await loadRepoInfo()).pushed_at)
+    } catch (err) {
+      logger.evolution.warn(`pushed_at unavailable for ${cacheKey}`, err)
+    }
 
     try {
       await db
@@ -266,6 +335,7 @@ export default defineEventHandler(async (event) => {
           snapshots: pool,
           tagCount: pool.length,
           capturedAt: now,
+          pushedAt,
           createdAt: now,
           updatedAt: now,
         })
@@ -275,6 +345,7 @@ export default defineEventHandler(async (event) => {
             snapshots: pool,
             tagCount: pool.length,
             capturedAt: now,
+            pushedAt,
             updatedAt: now,
           },
         })

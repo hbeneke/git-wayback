@@ -390,9 +390,15 @@ const props = withDefaults(
     repo: string
     branches?: string[]
     defaultBranch?: string
+    /** Page-level refresh pending: the next load bypasses the server cache. */
+    forceRefresh?: boolean
   }>(),
-  { branches: () => [], defaultBranch: '' }
+  { branches: () => [], defaultBranch: '', forceRefresh: false }
 )
+
+// Told the parent the pending refresh has been spent, so it is not reused for
+// every later reconfigure.
+const emit = defineEmits<{ (e: 'refresh-consumed'): void }>()
 
 const limitOptions = EVOLUTION.LIMIT_OPTIONS
 
@@ -516,12 +522,17 @@ async function loadEvolution() {
   error.value = null
 
   try {
+    const forcing = props.forceRefresh
+    if (forcing) emit('refresh-consumed')
+
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
       query: {
         source: source.value,
         sampling: sampling.value,
         limit: limit.value,
         ...(source.value === 'commits' && branch.value ? { branch: branch.value } : {}),
+        // `_` keeps the CDN out of it — the refresh has to reach the function.
+        ...(forcing ? { refresh: '1', _: Date.now() } : {}),
       },
     })
 

@@ -73,7 +73,28 @@
             </svg>
             <span>github</span>
           </a>
+
+          <button
+            type="button"
+            :disabled="refreshing"
+            :title="refreshTitle"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[rgb(var(--border)/.5)] text-xs text-[rgb(var(--muted))] transition-colors hover:text-[rgb(var(--foreground))] disabled:opacity-50"
+            @click="refreshData"
+          >
+            <svg
+              width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+              :class="refreshing ? 'animate-spin' : ''"
+              aria-hidden="true"
+            >
+              <path d="M14 8a6 6 0 1 1-1.76-4.24" />
+              <path d="M14 2v4h-4" />
+            </svg>
+            <span>{{ refreshing ? 'refreshing' : 'refresh' }}</span>
+          </button>
         </div>
+
+        <p v-if="refreshError" class="text-xs text-amber-400 mt-2">{{ refreshError }}</p>
 
         <div v-if="data.topics?.length" class="flex flex-wrap gap-1.5 mt-3">
           <span
@@ -97,6 +118,8 @@
               :repo="repo"
               :branches="data?.branches || []"
               :default-branch="data?.defaultBranch || ''"
+              :force-refresh="diagramNeedsRefresh"
+              @refresh-consumed="diagramNeedsRefresh = false"
             />
           </ErrorBoundary>
         </template>
@@ -357,6 +380,7 @@ interface RepoData {
     authorAvatar?: string
     date: string
   }>
+  fetchedAt: string
   branches: string[]
   branchCount: number
   releases: Array<{ tag: string; name: string; publishedAt: string; url: string; prerelease: boolean }>
@@ -367,12 +391,47 @@ interface RepoData {
   }
 }
 
-const { data, pending, error } = await useFetch<RepoData>(
+const { data, pending, error, refresh } = await useFetch<RepoData>(
   () => `/api/repos/${owner.value}/${repo.value}`,
   {
     key: `repo-${owner.value}-${repo.value}`,
   }
 )
+
+const refreshing = ref(false)
+const refreshError = ref<string | null>(null)
+// The diagram loads on demand, so a refresh made here is handed to it as a
+// pending flag and spent on its next load rather than re-fetching now.
+const diagramNeedsRefresh = ref(false)
+
+const refreshTitle = computed(() =>
+  data.value ? `Data from ${formatRelativeDate(data.value.fetchedAt)} — fetch again from GitHub` : 'Fetch again from GitHub'
+)
+
+async function refreshData() {
+  if (refreshing.value) return
+  refreshing.value = true
+  refreshError.value = null
+
+  try {
+    // Rebuilds the shared server cache entry; the useFetch call after it then
+    // reads the fresh value. `_` stops a CDN from answering the refresh itself.
+    await $fetch(`/api/repos/${owner.value}/${repo.value}`, {
+      query: { refresh: '1', _: Date.now() },
+    })
+    diagramNeedsRefresh.value = true
+    await refresh()
+  } catch (err: unknown) {
+    // 429 here is the refresh budget, not a failure of the page.
+    const status = (err as { statusCode?: number })?.statusCode
+    refreshError.value =
+      status === 429
+        ? 'Refresh limit reached. Try again later.'
+        : 'Could not refresh right now.'
+  } finally {
+    refreshing.value = false
+  }
+}
 
 const expandedCommits = ref(new Set<string>())
 

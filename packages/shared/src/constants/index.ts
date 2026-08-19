@@ -8,6 +8,18 @@ export const MS_PER_DAY = MS_PER_HOUR * 24
 export const EVOLUTION_CACHE_DURATION_MS = MS_PER_DAY
 
 /**
+ * Below this age a cached row is served without even asking GitHub whether the
+ * repo moved. Bounds the revalidation calls a hot repo can trigger.
+ */
+export const EVOLUTION_REVALIDATE_FLOOR_MS = MS_PER_MINUTE * 5
+
+/**
+ * A forced refresh is ignored while the row is younger than this, so a user
+ * hammering the button cannot turn one click into N full re-fetches.
+ */
+export const FORCE_REFRESH_MIN_AGE_MS = MS_PER_MINUTE
+
+/**
  * Rows untouched for this long are deleted by the purge job. Without it the
  * table only ever grows: expiry refreshes a row, it never removes one.
  */
