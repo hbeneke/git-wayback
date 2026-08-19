@@ -1,5 +1,5 @@
 <template>
-  <main class="max-w-5xl mx-auto px-4 sm:px-8 pt-8 pb-12">
+  <main class="max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-12">
     <p class="text-sm text-[rgb(var(--muted))] mb-8">
       Visualize the evolution of any GitHub repository.
     </p>

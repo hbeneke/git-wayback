@@ -115,6 +115,8 @@ export async function getRepoOverview(owner: string, repo: string) {
       sha: c.sha,
       shortSha: c.sha.substring(0, 7),
       message: c.commit.message.split('\n')[0],
+      // Rest of the message after the subject line.
+      body: c.commit.message.split('\n').slice(1).join('\n').trim(),
       authorName: c.commit.author.name,
       authorLogin: c.author?.login,
       authorAvatar: c.author?.avatar_url,

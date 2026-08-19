@@ -116,7 +116,28 @@
                   >
                     <span class="text-primary text-xs font-medium shrink-0 min-w-[60px]">{{ commit.shortSha }}</span>
                     <div class="flex-1 min-w-0">
-                      <p class="text-xs truncate">{{ commit.message }}</p>
+                      <button
+                        v-if="commit.body"
+                        type="button"
+                        class="flex items-start gap-1.5 text-left w-full"
+                        :aria-expanded="expandedCommits.has(commit.sha)"
+                        @click="toggleCommit(commit.sha)"
+                      >
+                        <span
+                          class="text-[10px] text-[rgb(var(--muted))] mt-0.5 transition-transform duration-200"
+                          :class="expandedCommits.has(commit.sha) ? 'rotate-90' : ''"
+                        >
+                          &#9654;
+                        </span>
+                        <span class="text-xs min-w-0" :class="expandedCommits.has(commit.sha) ? '' : 'truncate'">
+                          {{ commit.message }}
+                        </span>
+                      </button>
+                      <p v-else class="text-xs truncate">{{ commit.message }}</p>
+                      <pre
+                        v-if="commit.body && expandedCommits.has(commit.sha)"
+                        class="text-xs text-[rgb(var(--muted))] whitespace-pre-wrap break-words mt-1 ml-4"
+                      >{{ commit.body }}</pre>
                       <div class="flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] mt-0.5">
                         <span>{{ commit.authorLogin || commit.authorName }}</span>
                         <span>&middot;</span>
@@ -330,6 +351,7 @@ interface RepoData {
     sha: string
     shortSha: string
     message: string
+    body: string
     authorName: string
     authorLogin?: string
     authorAvatar?: string
@@ -351,6 +373,15 @@ const { data, pending, error } = await useFetch<RepoData>(
     key: `repo-${owner.value}-${repo.value}`,
   }
 )
+
+const expandedCommits = ref(new Set<string>())
+
+function toggleCommit(sha: string) {
+  // New Set so the template re-renders.
+  const next = new Set(expandedCommits.value)
+  if (!next.delete(sha)) next.add(sha)
+  expandedCommits.value = next
+}
 
 /** Counter chips in the page header. */
 const stats = computed(() => {
