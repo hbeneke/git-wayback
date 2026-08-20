@@ -43,3 +43,6 @@ test-results/
 
 # Cloned repos (for analysis)
 .repos/
+
+# Local agent config
+.claude/
