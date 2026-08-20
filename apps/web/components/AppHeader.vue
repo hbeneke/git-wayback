@@ -25,6 +25,12 @@
               git-wayback<span class="animate-blink">_</span>
             </span>
           </div>
+          <!-- The tagline lives here rather than on the home page, so it shows
+               on every route. Dropped when collapsed: the compact header is one
+               line tall. -->
+          <p v-if="!collapsed" class="text-xs text-[rgb(var(--muted))] mt-1 hidden sm:block">
+            Visualize the evolution of any GitHub repository.
+          </p>
         </div>
       </NuxtLink>
 

@@ -1,9 +1,5 @@
 <template>
   <main class="max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-12">
-    <p class="text-sm text-[rgb(var(--muted))] mb-8">
-      Visualize the evolution of any GitHub repository.
-    </p>
-
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
       <section>
         <h2 class="section-title mb-3">Recent repositories</h2>
