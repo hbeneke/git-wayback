@@ -76,21 +76,30 @@
 
           <button
             type="button"
-            :disabled="refreshing"
+            :disabled="refreshDisabled"
             :title="refreshTitle"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[rgb(var(--border)/.5)] text-xs text-[rgb(var(--muted))] transition-colors hover:text-[rgb(var(--foreground))] disabled:opacity-50"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs transition-colors disabled:cursor-default"
+            :class="justUpdated
+              ? 'border-emerald-500/50 text-emerald-400'
+              : 'border-[rgb(var(--border)/.5)] text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))] disabled:opacity-50'"
             @click="refreshData"
           >
+            <!-- Checkmark while the confirmation is up, arrow otherwise. -->
             <svg
               width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
               stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
               :class="refreshing ? 'animate-spin' : ''"
               aria-hidden="true"
             >
-              <path d="M14 8a6 6 0 1 1-1.76-4.24" />
-              <path d="M14 2v4h-4" />
+              <template v-if="justUpdated">
+                <path d="M3 8.5 6.5 12 13 4.5" />
+              </template>
+              <template v-else>
+                <path d="M14 8a6 6 0 1 1-1.76-4.24" />
+                <path d="M14 2v4h-4" />
+              </template>
             </svg>
-            <span>{{ refreshing ? 'refreshing' : 'refresh' }}</span>
+            <span class="tabular-nums">{{ refreshLabel }}</span>
           </button>
         </div>
 
@@ -337,6 +346,7 @@
 
 <script setup lang="ts">
 import {
+  FORCE_REFRESH_MIN_AGE_MS,
   formatNumber,
   formatDate,
   formatRelativeDate,
@@ -406,8 +416,50 @@ const { data, pending, error, refresh } = await useFetch<RepoData>(
   }
 )
 
+// Matches the one-second `animate-spin` cycle: the icon stops on a whole turn.
+const SPINNER_MIN_MS = 1000
+
+// Below this the server ignores a forced refresh anyway (FORCE_REFRESH_MIN_AGE_MS),
+// so the button stays locked for exactly as long as a click would be wasted.
+// The real quota guard is server-side: 5/h per IP and 60/h across all callers.
+const REFRESH_COOLDOWN_MS = FORCE_REFRESH_MIN_AGE_MS
+// How long the green "updated" confirmation stays up before the countdown shows.
+const UPDATED_BADGE_MS = 3000
+
 const refreshing = ref(false)
 const refreshError = ref<string | null>(null)
+const justUpdated = ref(false)
+const cooldownLeft = ref(0)
+
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+let updatedTimer: ReturnType<typeof setTimeout> | null = null
+
+function startCooldown(ms: number) {
+  cooldownLeft.value = Math.ceil(ms / 1000)
+
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    cooldownLeft.value--
+    if (cooldownLeft.value <= 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
+onUnmounted(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  if (updatedTimer) clearTimeout(updatedTimer)
+})
+
+const refreshDisabled = computed(() => refreshing.value || cooldownLeft.value > 0)
+
+const refreshLabel = computed(() => {
+  if (refreshing.value) return 'refreshing'
+  if (justUpdated.value) return 'updated'
+  if (cooldownLeft.value > 0) return `refresh ${cooldownLeft.value}s`
+  return 'refresh'
+})
 // The diagram loads on demand, so a refresh made here is handed to it as a
 // pending flag and spent on its next load rather than re-fetching now.
 const diagramNeedsRefresh = ref(false)
@@ -417,9 +469,16 @@ const refreshTitle = computed(() =>
 )
 
 async function refreshData() {
-  if (refreshing.value) return
+  if (refreshDisabled.value) return
   refreshing.value = true
   refreshError.value = null
+  justUpdated.value = false
+
+  let succeeded = false
+
+  // A cache hit returns too fast to see, which reads as a dead button. Hold the
+  // spinner for one full turn of the animation so the click is acknowledged.
+  const spin = new Promise((resolve) => setTimeout(resolve, SPINNER_MIN_MS))
 
   try {
     // Rebuilds the shared server cache entry; the useFetch call after it then
@@ -429,6 +488,7 @@ async function refreshData() {
     })
     diagramNeedsRefresh.value = true
     await refresh()
+    succeeded = true
   } catch (err: unknown) {
     // 429 here is the refresh budget, not a failure of the page.
     const status = (err as { statusCode?: number })?.statusCode
@@ -437,7 +497,22 @@ async function refreshData() {
         ? 'Refresh limit reached. Try again later.'
         : 'Could not refresh right now.'
   } finally {
+    // Held after a failure too — retrying immediately would only burn budget.
+    startCooldown(REFRESH_COOLDOWN_MS)
+
+    // In the finally so a 429 does not flash its message either. The success
+    // state lands only after the spin: swapping the icon while it is still
+    // turning renders a spinning checkmark.
+    await spin
     refreshing.value = false
+
+    if (succeeded) {
+      justUpdated.value = true
+      if (updatedTimer) clearTimeout(updatedTimer)
+      updatedTimer = setTimeout(() => {
+        justUpdated.value = false
+      }, UPDATED_BADGE_MS)
+    }
   }
 }
 
