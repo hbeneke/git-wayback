@@ -137,29 +137,37 @@
                     :key="commit.sha"
                     class="flex items-start gap-2"
                   >
-                    <span class="text-primary text-xs font-medium shrink-0 min-w-[60px]">{{ commit.shortSha }}</span>
+                    <!-- GitHub builds commit pages as <repo>/commit/<sha>, so the
+                         link needs no extra field from the API. -->
+                    <a
+                      :href="`${data.url}/commit/${commit.sha}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      :title="`View ${commit.shortSha} on GitHub`"
+                      class="text-primary text-xs font-medium shrink-0 min-w-[60px] hover:underline"
+                    >
+                      {{ commit.shortSha }}
+                    </a>
                     <div class="flex-1 min-w-0">
-                      <button
-                        v-if="commit.body"
-                        type="button"
-                        class="flex items-start gap-1.5 text-left w-full"
-                        :aria-expanded="expandedCommits.has(commit.sha)"
-                        @click="toggleCommit(commit.sha)"
-                      >
-                        <span
-                          class="text-[10px] text-[rgb(var(--muted))] mt-0.5 transition-transform duration-200"
-                          :class="expandedCommits.has(commit.sha) ? 'rotate-90' : ''"
-                        >
-                          &#9654;
-                        </span>
-                        <span class="text-xs min-w-0" :class="expandedCommits.has(commit.sha) ? '' : 'truncate'">
+                      <div class="flex items-start gap-1.5">
+                        <p class="text-xs flex-1 min-w-0" :class="expandedCommits.has(commit.sha) ? '' : 'truncate'">
                           {{ commit.message }}
-                        </span>
-                      </button>
-                      <p v-else class="text-xs truncate">{{ commit.message }}</p>
+                        </p>
+                        <!-- Only commits that carry a body get a toggle. -->
+                        <button
+                          v-if="commit.body"
+                          type="button"
+                          class="shrink-0 w-4 h-4 leading-none flex items-center justify-center rounded border border-[rgb(var(--border)/.5)] text-[10px] text-[rgb(var(--muted))] transition-colors hover:text-[rgb(var(--foreground))] hover:border-[rgb(var(--border))]"
+                          :aria-expanded="expandedCommits.has(commit.sha)"
+                          :aria-label="expandedCommits.has(commit.sha) ? 'Collapse commit message' : 'Expand commit message'"
+                          @click="toggleCommit(commit.sha)"
+                        >
+                          {{ expandedCommits.has(commit.sha) ? '−' : '+' }}
+                        </button>
+                      </div>
                       <pre
                         v-if="commit.body && expandedCommits.has(commit.sha)"
-                        class="text-xs text-[rgb(var(--muted))] whitespace-pre-wrap break-words mt-1 ml-4"
+                        class="text-xs text-[rgb(var(--muted))] whitespace-pre-wrap break-words mt-1"
                       >{{ commit.body }}</pre>
                       <div class="flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] mt-0.5">
                         <span>{{ commit.authorLogin || commit.authorName }}</span>
