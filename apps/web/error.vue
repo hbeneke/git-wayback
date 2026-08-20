@@ -11,7 +11,7 @@
       <p class="text-sm text-[rgb(var(--muted))] mt-6">{{ blurb }}</p>
 
       <p v-if="isNotFound" class="text-sm text-[rgb(var(--muted))] mt-2">
-        Nothing here to replay. Search for a repository, or
+        Search for another repository, or
         <NuxtLink to="/" class="link-primary" @click.prevent="reset">check out the default branch</NuxtLink>.
       </p>
       <p v-else class="text-sm text-[rgb(var(--muted))] mt-2">
@@ -36,13 +36,21 @@ const props = defineProps<{ error: NuxtError }>()
 const statusCode = computed(() => props.error.statusCode || 500)
 const isNotFound = computed(() => statusCode.value === 404)
 
+// A missing repository reaches here from the repo page; a missing route is
+// anything else that 404s.
+const isMissingRepo = computed(() => props.error.statusMessage === 'Repository Not Found')
+
 const headline = computed(() => {
+  if (isMissingRepo.value) return 'That repository is not in the timeline'
   if (isNotFound.value) return 'This commit never happened'
   if (statusCode.value === 429) return 'Slow down, the timeline is rewinding'
   return 'The history got corrupted'
 })
 
 const blurb = computed(() => {
+  if (isMissingRepo.value) {
+    return 'GitHub has no such repository, or it is private. Check the owner and the name.'
+  }
   if (isNotFound.value) {
     return 'You are in detached HEAD state, pointing at a ref that no repository ever wrote.'
   }

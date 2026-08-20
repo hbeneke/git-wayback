@@ -5,12 +5,6 @@
       <AppSpinner size="sm" />
     </div>
 
-    <!-- Error -->
-    <div v-else-if="error" class="py-20">
-      <p class="text-sm text-[rgb(var(--muted))]">Repository not found.</p>
-      <p class="text-xs text-[rgb(var(--muted))] mt-1">{{ error.message }}</p>
-    </div>
-
     <!-- Content -->
     <template v-else-if="data">
       <!-- Header -->
@@ -415,6 +409,22 @@ const { data, pending, error, refresh } = await useFetch<RepoData>(
     key: `repo-${owner.value}-${repo.value}`,
   }
 )
+
+// Handed to error.vue rather than rendered inline, so a missing repository
+// answers with a real status code instead of a 200 carrying an apology.
+if (error.value) {
+  const statusCode = error.value.statusCode || 502
+  throw createError({
+    statusCode,
+    // Read back by error.vue to pick repo wording over route wording.
+    statusMessage: statusCode === 404 ? 'Repository Not Found' : undefined,
+    message:
+      statusCode === 404
+        ? `No repository named ${owner.value}/${repo.value} on GitHub.`
+        : error.value.message,
+    fatal: true,
+  })
+}
 
 // Matches the one-second `animate-spin` cycle: the icon stops on a whole turn.
 const SPINNER_MIN_MS = 1000
