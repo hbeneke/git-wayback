@@ -37,7 +37,7 @@ const SIM_VELOCITY_DECAY = 0.45
 const SIM_RESTART_ALPHA = 0.55
 
 const FOLDER_ROOT_FILL = 'rgb(16, 185, 129)'
-const FOLDER_FILL = 'rgba(16, 185, 129, 0.4)'
+const FOLDER_FILL = 'rgb(18, 87, 67)'
 const MORE_FILL = 'rgba(107, 114, 128, 0.35)'
 
 // darken() re-parses the color string on every call; the palette is tiny.
@@ -123,6 +123,8 @@ export function useDiagramRenderer(
 
   // Draw batches: one canvas path per color instead of one element per bubble.
   let nodeBatches: SimNode[][] = []
+  /** Largest node radius, so the hit test knows how wide to search. */
+  let maxNodeRadius = 0
   let linkBatches: LinkBatch[] = []
   let enterNodeBatches: SimNode[][] = []
   let enterLinkBatches: LinkBatch[] = []
@@ -318,6 +320,7 @@ export function useDiagramRenderer(
 
     nodes = next
     links = nextLinks
+    maxNodeRadius = next.reduce((m, n) => Math.max(m, n.r), 0)
 
     // Everything entering this snapshot shares one fade, so it stays one batch.
     entering = fresh.length > 0
@@ -488,6 +491,17 @@ export function useDiagramRenderer(
         c.strokeStyle = grad
         c.lineWidth = 1.5
         c.stroke()
+
+        // Repaint the parent so the line ends under it, not across its centre.
+        const src = link.source
+        c.beginPath()
+        c.moveTo(sx + src.r, sy)
+        c.arc(sx, sy, src.r, 0, TAU)
+        c.fillStyle = src.fill
+        c.fill()
+        c.strokeStyle = src.stroke
+        c.lineWidth = src.rim
+        c.stroke()
       }
 
       c.beginPath()
@@ -520,7 +534,29 @@ export function useDiagramRenderer(
     if (!canvas || !nodes.length) return null
     const [mx, my] = d3.pointer(event, canvas)
     const [px, py] = transform.invert([mx, my])
-    return getQuadtree().find(px, py, HIT_RADIUS_PX / transform.k) ?? null
+    const slack = HIT_RADIUS_PX / transform.k
+    // find() measures to the centre, so search wide and score by surface distance.
+    const reach = slack + maxNodeRadius
+    let best: SimNode | null = null
+    let bestScore = Infinity
+    getQuadtree().visit((quad, x0, y0, x1, y1) => {
+      if (!quad.length) {
+        let leaf: typeof quad | undefined = quad
+        do {
+          const node = leaf.data
+          const dx = (node.x ?? 0) - px
+          const dy = (node.y ?? 0) - py
+          const score = Math.sqrt(dx * dx + dy * dy) - node.r
+          if (score <= slack && score < bestScore) {
+            best = node
+            bestScore = score
+          }
+          leaf = leaf.next
+        } while (leaf)
+      }
+      return x0 > px + reach || x1 < px - reach || y0 > py + reach || y1 < py - reach
+    })
+    return best as SimNode | null
   }
 
   function setHovered(node: SimNode | null) {
