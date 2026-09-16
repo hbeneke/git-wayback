@@ -556,7 +556,31 @@ export function useDiagramRenderer(
       }
       return x0 > px + reach || x1 < px - reach || y0 > py + reach || y1 < py - reach
     })
-    return best as SimNode | null
+    return (best as SimNode | null) ?? pickLink(px, py, slack)
+  }
+
+  /** Falls back to the links: hovering one lights up the node it feeds. */
+  function pickLink(px: number, py: number, slack: number): SimNode | null {
+    let best: SimNode | null = null
+    let bestDist = slack
+    for (const link of links) {
+      const sx = link.source.x ?? 0
+      const sy = link.source.y ?? 0
+      const tx = link.target.x ?? 0
+      const ty = link.target.y ?? 0
+      const dx = tx - sx
+      const dy = ty - sy
+      const len2 = dx * dx + dy * dy
+      const t = len2 ? Math.max(0, Math.min(1, ((px - sx) * dx + (py - sy) * dy) / len2)) : 0
+      const ox = px - (sx + t * dx)
+      const oy = py - (sy + t * dy)
+      const dist = Math.sqrt(ox * ox + oy * oy)
+      if (dist < bestDist) {
+        best = link.target
+        bestDist = dist
+      }
+    }
+    return best
   }
 
   function setHovered(node: SimNode | null) {
