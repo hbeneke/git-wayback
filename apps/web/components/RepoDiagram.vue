@@ -414,8 +414,10 @@ const props = withDefaults(
     defaultBranch?: string
     /** Page-level refresh pending: the next load bypasses the server cache. */
     forceRefresh?: boolean
+    /** Bumped by the page to open a snapshot straight away, skipping the config. */
+    launchSnapshot?: number
   }>(),
-  { branches: () => [], defaultBranch: '', forceRefresh: false }
+  { branches: () => [], defaultBranch: '', forceRefresh: false, launchSnapshot: 0 }
 )
 
 // Told the parent the pending refresh has been spent, so it is not reused for
@@ -581,6 +583,19 @@ async function loadEvolution() {
     loading.value = false
   }
 }
+
+// The page can launch a snapshot from outside (the details-tab banner); the
+// counter is what makes a second click re-fire it.
+watch(
+  () => props.launchSnapshot,
+  (n) => {
+    if (!n) return
+    mode.value = 'snapshot'
+    source.value = 'commits'
+    if (!branch.value) branch.value = props.defaultBranch || props.branches[0] || ''
+    start()
+  }
+)
 
 async function start() {
   started.value = true

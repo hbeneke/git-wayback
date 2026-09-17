@@ -122,12 +122,38 @@
               :branches="data?.branches || []"
               :default-branch="data?.defaultBranch || ''"
               :force-refresh="diagramNeedsRefresh"
+              :launch-snapshot="snapshotLaunch"
               @refresh-consumed="diagramNeedsRefresh = false"
             />
           </ErrorBoundary>
         </template>
 
         <template #details>
+          <!-- The map is the point of the app, so the details tab sells it. -->
+          <button
+            type="button"
+            class="group w-full mb-8 flex items-center gap-4 text-left rounded border border-primary/40 bg-[radial-gradient(ellipse_at_left,rgb(16_185_129/.14)_0%,rgb(var(--border)/.15)_70%)] px-5 py-4 transition-colors hover:border-primary"
+            @click="openSnapshot"
+          >
+            <span class="shrink-0 w-10 h-10 rounded-full border border-primary/50 text-primary flex items-center justify-center transition-colors group-hover:bg-primary group-hover:text-[rgb(var(--bg))]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 3v12" />
+                <path d="M21 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
+                <path d="M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-fg">See this repo as a living map</span>
+              <span class="block text-xs text-[rgb(var(--muted))] mt-0.5">
+                Every file a node, every folder a branch — open the snapshot of the latest commit, or play the whole history.
+              </span>
+            </span>
+            <span class="shrink-0 text-xs font-semibold text-primary whitespace-nowrap">
+              Open snapshot &rarr;
+            </span>
+          </button>
+
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Main column: commits + activity -->
             <div class="lg:col-span-2 space-y-8">
@@ -354,6 +380,13 @@ const owner = computed(() => route.params.owner as string)
 const repo = computed(() => route.params.repo as string)
 
 const activeTab = ref<'details' | 'evolution' | 'screenshots'>('details')
+// Bumped rather than set: a second click on the banner has to re-open it.
+const snapshotLaunch = ref(0)
+
+function openSnapshot() {
+  activeTab.value = 'evolution'
+  snapshotLaunch.value++
+}
 const tabs = [
   { id: 'details' as const, label: 'details', icon: 'doc' as const },
   { id: 'evolution' as const, label: 'evolution', icon: 'branch' as const },
