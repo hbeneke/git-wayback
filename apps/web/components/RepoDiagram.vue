@@ -8,6 +8,26 @@
       <div class="min-w-[320px] bg-bg/55 border border-[rgb(var(--border))] rounded-md overflow-hidden" @click.stop>
         <div class="flex flex-col gap-2.5 pt-[18px] px-[18px] pb-4">
           <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Mode</span>
+            <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
+              <button
+                type="button"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="mode === 'history' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
+                title="Play the repository across several snapshots"
+                @click="mode = 'history'"
+              >History</button>
+              <button
+                type="button"
+                class="py-1 px-2.5 text-[11px] border-r border-[rgb(var(--border))] last:border-r-0 transition-colors"
+                :class="mode === 'snapshot' ? 'bg-primary text-[rgb(var(--bg))]' : 'bg-transparent text-[rgb(var(--muted))] hover:text-fg'"
+                title="Render the newest state only, no timeline"
+                @click="mode = 'snapshot'"
+              >Snapshot</button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3">
             <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Source</span>
             <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
@@ -37,7 +57,7 @@
             </select>
           </div>
 
-          <div class="flex items-center justify-between gap-3">
+          <div v-if="isHistory" class="flex items-center justify-between gap-3">
             <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Versions</span>
             <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
@@ -51,7 +71,7 @@
             </div>
           </div>
 
-          <div class="flex items-center justify-between gap-3">
+          <div v-if="isHistory" class="flex items-center justify-between gap-3">
             <span class="text-[11px] uppercase tracking-wider text-[rgb(var(--muted))]">Sampling</span>
             <div class="inline-flex border border-[rgb(var(--border))] rounded overflow-hidden">
               <button
@@ -76,10 +96,10 @@
           <button
             class="inline-flex items-center py-[7px] px-[18px] text-xs font-semibold rounded border border-primary text-primary bg-transparent cursor-pointer transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
             type="button"
-            aria-label="Build the evolution timeline"
+            :aria-label="isHistory ? 'Build the evolution timeline' : 'Render the latest snapshot'"
             @click="start"
           >
-            <span>Build timeline</span>
+            <span>{{ isHistory ? 'Build timeline' : 'Render snapshot' }}</span>
           </button>
         </div>
       </div>
@@ -94,8 +114,8 @@
 
     <!-- Loading -->
     <div v-else-if="loading" class="w-full h-[500px] flex flex-col items-center justify-center border border-[rgb(var(--border))] rounded bg-[radial-gradient(ellipse_at_center,rgb(26_27_30)_0%,rgb(15_15_20)_100%)]">
-      <AppSpinner size="lg" label="Building timeline" />
-      <p class="text-xs text-[rgb(var(--muted))] mt-3">Building timeline...</p>
+      <AppSpinner size="lg" :label="isHistory ? 'Building timeline' : 'Loading snapshot'" />
+      <p class="text-xs text-[rgb(var(--muted))] mt-3">{{ isHistory ? 'Building timeline...' : 'Loading snapshot...' }}</p>
     </div>
 
     <!-- Error -->
@@ -147,7 +167,7 @@
           </div>
           <div class="flex items-center gap-3 text-xs text-[rgb(var(--muted))]">
             <span class="tabular-nums">
-              {{ source }}{{ source === 'commits' ? `@${branch}` : '' }} · {{ snapshots.length }} · {{ sampling }}
+              {{ source }}{{ source === 'commits' ? `@${branch}` : '' }}{{ hasTimeline ? ` · ${snapshots.length} · ${sampling}` : ' · latest' }}
             </span>
             <button @click="reconfigure" class="text-xs link-primary">Change</button>
             <span v-if="currentSnapshot">{{ currentSnapshot.stats.totalFiles }} files</span>
@@ -297,6 +317,7 @@
 
           <!-- Controls float over the graph, unpainted, so the blur has something behind it. -->
           <div
+            v-if="hasTimeline"
             class="absolute inset-x-0 bottom-0 z-20 px-4 py-3 border-t border-[rgb(var(--border))] backdrop-blur-sm"
           >
             <div class="flex items-center gap-3">
@@ -382,6 +403,7 @@ import type {
   EvolutionSource,
   EvolutionSampling,
 } from '~/composables/useDiagramTree'
+import type { EvolutionMode } from '@git-wayback/shared'
 import { EXTENSION_COLORS, buildTree } from '~/composables/useDiagramTree'
 
 const props = withDefaults(
@@ -402,6 +424,8 @@ const emit = defineEmits<{ (e: 'refresh-consumed'): void }>()
 
 const limitOptions = EVOLUTION.LIMIT_OPTIONS
 
+const mode = ref<EvolutionMode>(EVOLUTION.DEFAULT_MODE)
+const isHistory = computed(() => mode.value === 'history')
 const source = ref<EvolutionSource>(EVOLUTION.DEFAULT_SOURCE)
 const sampling = ref<EvolutionSampling>(EVOLUTION.DEFAULT_SAMPLING)
 const limit = ref<number>(EVOLUTION.DEFAULT_LIMIT)
@@ -437,6 +461,8 @@ const currentSnapshot = computed(() => snapshots.value[currentIndex.value])
 const tagFirstLine = computed(() => currentSnapshot.value?.message?.trim().split('\n')[0] || '')
 const tagIsMultiline = computed(() => (currentSnapshot.value?.message?.trim().split('\n').length || 0) > 1)
 const totalSnapshots = computed(() => snapshots.value.length)
+/** Snapshot mode (or a lone snapshot) has nothing to scrub through. */
+const hasTimeline = computed(() => totalSnapshots.value > 1)
 
 const filesPanelRef = ref<{ scrollToPath: (path: string) => void } | null>(null)
 const filesPanelOpen = ref(true)
@@ -456,7 +482,7 @@ const { isPlaying, togglePlay, stopPlay } = useDiagramPlayback(currentIndex, tot
 // overlay is the explicit start. It stays out of the way once the user has
 // taken control of playback (play pressed or timeline scrubbed).
 const playbackStarted = ref(false)
-const showCenterPlay = computed(() => !isPlaying.value && !playbackStarted.value)
+const showCenterPlay = computed(() => hasTimeline.value && !isPlaying.value && !playbackStarted.value)
 
 function startPlayback() {
   playbackStarted.value = true
@@ -528,8 +554,8 @@ async function loadEvolution() {
     const response = await $fetch<EvolutionResponse>(`/api/repos/${props.owner}/${props.repo}/evolution`, {
       query: {
         source: source.value,
-        sampling: sampling.value,
-        limit: limit.value,
+        sampling: isHistory.value ? sampling.value : 'latest',
+        limit: isHistory.value ? limit.value : EVOLUTION.SNAPSHOT_LIMIT,
         ...(source.value === 'commits' && branch.value ? { branch: branch.value } : {}),
         // `_` keeps the CDN out of it — the refresh has to reach the function.
         ...(forcing ? { refresh: '1', _: Date.now() } : {}),

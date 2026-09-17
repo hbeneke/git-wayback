@@ -76,6 +76,13 @@ export const EVOLUTION = {
   /** Counts offered in the UI selector (kept <= MAX_LIMIT) */
   LIMIT_OPTIONS: [10, 20, 30],
 
+  /** Snapshot mode: the newest ref only, no timeline. */
+  SNAPSHOT_LIMIT: 1,
+
+  /** Available view modes */
+  MODES: ['history', 'snapshot'] as const,
+  DEFAULT_MODE: 'history' as const,
+
   /**
    * Max items pulled from GitHub before sampling down to `limit`.
    * Bounds API cost for repos with thousands of tags/commits.
@@ -96,6 +103,7 @@ export const EVOLUTION = {
 } as const
 
 export type EvolutionSource = (typeof EVOLUTION.SOURCES)[number]
+export type EvolutionMode = (typeof EVOLUTION.MODES)[number]
 export type EvolutionSampling = (typeof EVOLUTION.SAMPLING)[number]
 
 // UI display limits

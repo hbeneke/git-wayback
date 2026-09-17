@@ -184,9 +184,8 @@ export default defineEventHandler(async (event) => {
   // part of the cache key, so accepting every value in 1..MAX_LIMIT meant 30
   // distinct rows per repo/source/branch/sampling combination.
   const requestedLimit = Number(query.limit)
-  const limit = (EVOLUTION.LIMIT_OPTIONS as readonly number[]).includes(requestedLimit)
-    ? requestedLimit
-    : EVOLUTION.DEFAULT_LIMIT
+  const allowedLimits: readonly number[] = [EVOLUTION.SNAPSHOT_LIMIT, ...EVOLUTION.LIMIT_OPTIONS]
+  const limit = allowedLimits.includes(requestedLimit) ? requestedLimit : EVOLUTION.DEFAULT_LIMIT
 
   const db = createDb(getDatabaseUrl())
 
