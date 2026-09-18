@@ -132,10 +132,10 @@
           <!-- The map is the point of the app, so the details tab sells it. -->
           <button
             type="button"
-            class="group w-full mb-8 flex items-center gap-4 text-left rounded border border-primary/40 bg-[radial-gradient(ellipse_at_left,rgb(16_185_129/.14)_0%,rgb(var(--border)/.15)_70%)] px-5 py-4 transition-colors hover:border-primary"
+            class="group w-full mb-8 flex items-center gap-4 text-left rounded border border-[rgb(var(--border))] border-l-2 border-l-primary bg-[rgb(var(--border)/.18)] px-5 py-4 transition-colors hover:border-primary hover:bg-[rgb(var(--border)/.3)]"
             @click="openSnapshot"
           >
-            <span class="shrink-0 w-10 h-10 rounded-full border border-primary/50 text-primary flex items-center justify-center transition-colors group-hover:bg-primary group-hover:text-[rgb(var(--bg))]">
+            <span class="shrink-0 w-10 h-10 rounded border border-[rgb(var(--border))] text-primary flex items-center justify-center transition-colors group-hover:border-primary">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M6 3v12" />
                 <path d="M21 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
