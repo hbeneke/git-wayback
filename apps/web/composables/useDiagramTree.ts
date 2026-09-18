@@ -199,15 +199,22 @@ export function collapseTree(
   return collapseNode(root, perFolder, keepExpanded)
 }
 
-export function getExtensionColor(ext: string | null): string {
-  if (!ext) return EXTENSION_COLORS.other
-  return EXTENSION_COLORS[ext.toLowerCase()] || EXTENSION_COLORS.other
+export const FOLDER_COLOR = 'rgb(16, 185, 129)'
+
+/** Legend key for an extension: its own entry when the palette has one, else 'other'. */
+export function extensionKey(ext: string | null | undefined): string {
+  const lower = ext?.toLowerCase()
+  return lower && EXTENSION_COLORS[lower] ? lower : 'other'
+}
+
+export function getExtensionColor(ext: string | null | undefined): string {
+  return EXTENSION_COLORS[extensionKey(ext)]
 }
 
 export function getNodeColor(data: TreeNode): string {
-  if (data.type === 'folder') return 'rgb(16, 185, 129)'
+  if (data.type === 'folder') return FOLDER_COLOR
   if (data.type === 'more') return EXTENSION_COLORS.other
-  return getExtensionColor(data.extension || null)
+  return getExtensionColor(data.extension)
 }
 
 export function getFileKind(data: TreeNode): string {

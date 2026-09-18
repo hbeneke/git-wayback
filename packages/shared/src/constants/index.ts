@@ -122,19 +122,4 @@ export const DIAGRAM = {
 
   /** Default width fallback */
   DEFAULT_WIDTH: 900,
-
-  /** Padding from edges for tree layout */
-  EDGE_PADDING: 100,
-
-  /** Maximum node radius for files */
-  MAX_NODE_RADIUS: 8,
-
-  /** Minimum node radius for files */
-  MIN_NODE_RADIUS: 3,
-
-  /** Root node radius */
-  ROOT_NODE_RADIUS: 8,
-
-  /** Folder node radius */
-  FOLDER_NODE_RADIUS: 4,
 } as const

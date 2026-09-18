@@ -1,33 +1,18 @@
 import { D3_EXIT_TRANSITION_DURATION_MS, DIAGRAM } from '@git-wayback/shared'
 import * as d3 from 'd3'
+import type { Graph, LinkBatch, SimLink, SimNode } from './diagram/graph'
+import { batchLinks, batchNodes, buildGraph, pickAt } from './diagram/graph'
+import type { Scene } from './diagram/paint'
+import { paintScene } from './diagram/paint'
 import type { TreeNode } from './useDiagramTree'
-import {
-  collapseTree,
-  darken,
-  EXTENSION_COLORS,
-  getExtensionColor,
-  getFileKind,
-  getNodeColor,
-  mixColors,
-  RENDER_FILE_BUDGET,
-} from './useDiagramTree'
-
-const TAU = Math.PI * 2
+import { collapseTree, getFileKind, RENDER_FILE_BUDGET } from './useDiagramTree'
 
 const HOVER_SCALE = 2.2
 const HOVER_MS = 160
-const LINK_BASE_ALPHA = 0.35
-/** Steps a link is split into to fake a gradient while staying batched. */
-const LINK_SEGMENTS = 6
 /** Screen-space slack around the cursor when picking a node. */
 const HIT_RADIUS_PX = 10
-
-/** Thin rims: a flat 1px swallowed most of a 2px-radius file bubble. */
-function rimWidth(r: number): number {
-  const w = Math.min(1.1, Math.max(0.4, r * 0.22))
-  // Quantized so nodes still share draw batches.
-  return Math.round(w * 4) / 4
-}
+const ZOOM_TO_SCALE = 2.5
+const ZOOM_TO_MS = 700
 
 // Faster than d3 defaults so the graph settles well inside the playback interval.
 const SIM_ALPHA_DECAY = 0.055
@@ -35,68 +20,63 @@ const SIM_ALPHA_MIN = 0.02
 const SIM_VELOCITY_DECAY = 0.45
 /** Alpha injected when a new snapshot arrives — a nudge, not a full reheat. */
 const SIM_RESTART_ALPHA = 0.55
+/** Alpha after a resize: enough to drift to the new centre, not to reshuffle. */
+const SIM_RESIZE_ALPHA = 0.1
 
-const FOLDER_ROOT_FILL = 'rgb(16, 185, 129)'
-const FOLDER_FILL = 'rgb(18, 87, 67)'
-const MORE_FILL = 'rgba(107, 114, 128, 0.35)'
-
-// darken() re-parses the color string on every call; the palette is tiny.
-const strokeCache = new Map<string, string>()
-function strokeFor(color: string): string {
-  let s = strokeCache.get(color)
-  if (!s) {
-    s = darken(color, 0.75)
-    strokeCache.set(color, s)
-  }
-  return s
+export interface DiagramTooltip {
+  visible: boolean
+  x: number
+  y: number
+  name: string
+  dir: string
+  kind: string
 }
 
-interface SimNode extends d3.SimulationNodeDatum {
-  key: string
-  data: TreeNode
-  depth: number
-  r: number
-  parentKey: string | null
-  fill: string
-  stroke: string
-  dashed: boolean
-  rim: number
-  /** Batch key — nodes sharing one are drawn as a single canvas path. */
-  style: string
-}
-
-interface SimLink extends d3.SimulationLinkDatum<SimNode> {
-  key: string
-  source: SimNode
-  target: SimNode
-  from: string
-  to: string
-}
-
-/** Links sharing an endpoint-color pair, plus the ramp they are drawn with. */
-interface LinkBatch {
-  links: SimLink[]
-  ramp: string[]
-}
-
-export function useDiagramRenderer(
-  diagramContainer: Ref<HTMLElement | null>,
+export interface DiagramRendererOptions {
+  container: Ref<HTMLElement | null>
   /** Full tree for the current snapshot, built once by the owning component. */
-  fileTree: ComputedRef<TreeNode | null>,
-  hiddenExtensions: Ref<Set<string>>,
-  tooltip: Ref<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>,
-  hoveredGraphPath: Ref<string | null>,
-  onNodeClick: (path: string) => void,
-  expanded?: Ref<boolean>,
-) {
-  // Expanded mode fills the container; normal mode keeps the design height.
-  const resolveHeight = (el: HTMLElement | null) =>
-    expanded?.value && el?.clientHeight ? el.clientHeight : DIAGRAM.HEIGHT
+  fileTree: ComputedRef<TreeNode | null>
+  hiddenExtensions: Ref<Set<string>>
+  tooltip: Ref<DiagramTooltip>
+  hoveredGraphPath: Ref<string | null>
+  onNodeClick: (path: string) => void
+  /** Expanded mode fills the container; normal mode keeps the design height. */
+  expanded?: Ref<boolean>
+}
+
+function emptyGraph(): Graph {
+  return {
+    nodes: [],
+    links: [],
+    fresh: [],
+    freshLinks: [],
+    moreNodes: [],
+    linkByTarget: new Map(),
+    maxNodeRadius: 0,
+    collapsedFiles: 0,
+  }
+}
+
+function linkDistance(d: SimLink): number {
+  // Shorter with depth so files cluster around their folder.
+  return Math.max(12, 70 / Math.max(d.target.depth, 1)) + d.target.r
+}
+
+export function useDiagramRenderer(opts: DiagramRendererOptions) {
+  const {
+    container,
+    fileTree,
+    hiddenExtensions,
+    tooltip,
+    hoveredGraphPath,
+    onNodeClick,
+    expanded,
+  } = opts
 
   // Folders whose 'more' bubble the user clicked — rendered in full from then on.
   const expandedFolders = new Set<string>()
   let expandedVersion = 0
-  // Resize and legend toggles re-render without changing the tree; reuse the collapse.
+  // Legend toggles re-render without changing the tree; reuse the collapse.
   let collapsed: { src: TreeNode; version: number; out: TreeNode } | null = null
   /** Files currently folded into 'more' bubbles; 0 when the whole tree is drawn. */
   const collapsedFiles = ref(0)
@@ -115,16 +95,10 @@ export function useDiagramRenderer(
   // Keyed by path so a surviving file keeps its position — that is what makes the graph grow.
   let simulation: d3.Simulation<SimNode, SimLink> | null = null
   const nodeByKey = new Map<string, SimNode>()
-  let nodes: SimNode[] = []
-  let links: SimLink[] = []
-  /** Parent link of each node, for the hover highlight. */
-  const linkByTarget = new Map<string, SimLink>()
-  let moreNodes: SimNode[] = []
+  let graph = emptyGraph()
 
   // Draw batches: one canvas path per color instead of one element per bubble.
   let nodeBatches: SimNode[][] = []
-  /** Largest node radius, so the hit test knows how wide to search. */
-  let maxNodeRadius = 0
   let linkBatches: LinkBatch[] = []
   let enterNodeBatches: SimNode[][] = []
   let enterLinkBatches: LinkBatch[] = []
@@ -132,39 +106,17 @@ export function useDiagramRenderer(
   let entering = false
 
   let drawFrame: number | null = null
-  let quadtree: d3.Quadtree<SimNode> | null = null
+  let hoverFrame: number | null = null
+  let pointer: { x: number; y: number } | null = null
 
   let hovered: SimNode | null = null
   let hoverStart = 0
   let externalKey: string | null = null
 
-  function getNodeRadius(d: { data: TreeNode; depth: number }): number {
-    if (d.data.type === 'folder') {
-      return d.depth === 0 ? 6 : 3
-    }
-    if (d.data.type === 'more') {
-      return Math.max(6, Math.min(12, 4 + Math.sqrt(d.data.count || 1)))
-    }
-    return Math.max(2, Math.min(6, Math.sqrt((d.data.size || 100) / 500)))
-  }
-
-  function fillFor(data: TreeNode, depth: number): string {
-    if (data.type === 'folder') return depth === 0 ? FOLDER_ROOT_FILL : FOLDER_FILL
-    if (data.type === 'more') return MORE_FILL
-    return getExtensionColor(data.extension || null)
-  }
-
-  function isExtensionHidden(ext: string | null): boolean {
-    if (!ext) return hiddenExtensions.value.has('other')
-    const normalizedExt = ext.toLowerCase()
-    if (EXTENSION_COLORS[normalizedExt]) {
-      return hiddenExtensions.value.has(normalizedExt)
-    }
-    return hiddenExtensions.value.has('other')
-  }
+  // --- Tooltip -------------------------------------------------------------
 
   function showTooltip(clientX: number, clientY: number, data: TreeNode) {
-    const wrapper = diagramContainer.value?.parentElement
+    const wrapper = container.value?.parentElement
     if (!wrapper) return
     const rect = wrapper.getBoundingClientRect()
     const parts = data.path.split('/')
@@ -184,46 +136,9 @@ export function useDiagramRenderer(
     tooltip.value = { ...tooltip.value, visible: false }
   }
 
-  function batchNodes(list: SimNode[]): SimNode[][] {
-    const byStyle = new Map<string, SimNode[]>()
-    for (const n of list) {
-      const bucket = byStyle.get(n.style)
-      if (bucket) bucket.push(n)
-      else byStyle.set(n.style, [n])
-    }
-    return [...byStyle.values()]
-  }
+  // --- Graph ---------------------------------------------------------------
 
-  // Grouped by endpoint-color pair: the palette is small, so a few dozen
-  // batches cover every link and each keeps a single stroke per segment.
-  function batchLinks(list: SimLink[]): LinkBatch[] {
-    const byPair = new Map<string, LinkBatch>()
-    for (const l of list) {
-      const key = `${l.from}|${l.to}`
-      const bucket = byPair.get(key)
-      if (bucket) {
-        bucket.links.push(l)
-        continue
-      }
-      const ramp: string[] = []
-      for (let i = 0; i < LINK_SEGMENTS; i++) {
-        ramp.push(mixColors(l.from, l.to, (i + 0.5) / LINK_SEGMENTS))
-      }
-      byPair.set(key, { links: [l], ramp })
-    }
-    return [...byPair.values()]
-  }
-
-  /** Rebuilds nodes/links for the current snapshot, reusing surviving bodies. */
-  function buildGraph() {
-    if (!fileTree.value) {
-      nodes = []
-      links = []
-      return
-    }
-
-    // Thin first: on a big repo the cost is simply the number of bodies carried.
-    const src = fileTree.value
+  function collapsedTree(src: TreeNode): TreeNode {
     if (!collapsed || collapsed.src !== src || collapsed.version !== expandedVersion) {
       collapsed = {
         src,
@@ -231,127 +146,55 @@ export function useDiagramRenderer(
         out: collapseTree(src, RENDER_FILE_BUDGET, expandedFolders),
       }
     }
+    return collapsed.out
+  }
 
-    const root = d3.hierarchy(collapsed.out)
-    const descendants = root.descendants()
-
-    collapsedFiles.value = descendants.reduce(
-      (n, d) => (d.data.type === 'more' ? n + (d.data.count || 0) : n),
-      0,
-    )
-
-    const seen = new Set<string>()
-    const next: SimNode[] = []
-    const fresh: SimNode[] = []
-    const freshKeys = new Set<string>()
-    moreNodes = []
-
-    for (const d of descendants) {
-      if (d.data.type === 'file' && isExtensionHidden(d.data.extension || null)) continue
-
-      const key = d.data.path || d.data.name
-      const parentKey = d.parent ? d.parent.data.path || d.parent.data.name : null
-      seen.add(key)
-
-      let node = nodeByKey.get(key)
-      if (!node) {
-        // New bubbles spawn on their parent with jitter so they push outwards.
-        const parent = parentKey ? nodeByKey.get(parentKey) : null
-        node = {
-          key,
-          data: d.data,
-          depth: d.depth,
-          r: 1,
-          parentKey,
-          fill: fillFor(d.data, d.depth),
-          stroke: strokeFor(getNodeColor(d.data)),
-          dashed: d.data.type === 'more',
-          rim: 0.5,
-          style: '',
-          x: (parent?.x ?? centerX) + (Math.random() - 0.5) * 20,
-          y: (parent?.y ?? centerY) + (Math.random() - 0.5) * 20,
-        }
-        nodeByKey.set(key, node)
-        fresh.push(node)
-        freshKeys.add(key)
-      }
-      node.data = d.data
-      node.depth = d.depth
-      node.parentKey = parentKey
-      // Radius tracks file size and 'more' counts, so the rim follows it.
-      node.r = getNodeRadius(d)
-      node.rim = rimWidth(node.r)
-      node.style = `${node.fill}|${node.stroke}|${node.dashed ? 1 : 0}|${node.rim}`
-      next.push(node)
-      if (d.data.type === 'more') moreNodes.push(node)
+  function rebuildGraph() {
+    if (!fileTree.value) {
+      graph = emptyGraph()
+      collapsedFiles.value = 0
+      return
     }
 
-    // Drop departed nodes, else the simulation keeps ticking invisible bodies.
-    for (const key of nodeByKey.keys()) {
-      if (!seen.has(key)) nodeByKey.delete(key)
-    }
+    // Thin first: on a big repo the cost is simply the number of bodies carried.
+    graph = buildGraph({
+      tree: collapsedTree(fileTree.value),
+      nodeByKey,
+      hiddenExtensions: hiddenExtensions.value,
+      centerX,
+      centerY,
+    })
+    collapsedFiles.value = graph.collapsedFiles
 
-    const nextLinks: SimLink[] = []
-    const freshLinks: SimLink[] = []
-    linkByTarget.clear()
-
-    for (const node of next) {
-      if (!node.parentKey) continue
-      const source = nodeByKey.get(node.parentKey)
-      if (!source) continue
-      const link: SimLink = {
-        key: `${source.key}->${node.key}`,
-        source,
-        target: node,
-        from: getNodeColor(source.data),
-        to: getNodeColor(node.data),
-      }
-      nextLinks.push(link)
-      linkByTarget.set(node.key, link)
-      if (freshKeys.has(node.key)) freshLinks.push(link)
-    }
-
-    // The repo root anchors the whole graph at the center.
-    const rootNode = next[0]
-    if (rootNode && rootNode.depth === 0) {
-      rootNode.fx = centerX
-      rootNode.fy = centerY
-    }
-
-    nodes = next
-    links = nextLinks
-    maxNodeRadius = next.reduce((m, n) => Math.max(m, n.r), 0)
+    // A hovered bubble that left with this snapshot must not linger as a ghost.
+    if (hovered && !nodeByKey.has(hovered.key)) setHovered(null)
 
     // Everything entering this snapshot shares one fade, so it stays one batch.
+    const { nodes, links, fresh, freshLinks } = graph
     entering = fresh.length > 0
-    nodeBatches = batchNodes(entering ? next.filter((n) => !freshKeys.has(n.key)) : next)
-    linkBatches = batchLinks(
-      entering ? nextLinks.filter((l) => !freshKeys.has(l.target.key)) : nextLinks,
-    )
-    enterNodeBatches = batchNodes(fresh)
-    enterLinkBatches = batchLinks(freshLinks)
-    enterStart = performance.now()
-    quadtree = null
+    if (entering) {
+      const freshKeys = new Set(fresh.map((n) => n.key))
+      nodeBatches = batchNodes(nodes.filter((n) => !freshKeys.has(n.key)))
+      linkBatches = batchLinks(links.filter((l) => !freshKeys.has(l.target.key)))
+      enterNodeBatches = batchNodes(fresh)
+      enterLinkBatches = batchLinks(freshLinks)
+      enterStart = performance.now()
+    } else {
+      nodeBatches = batchNodes(nodes)
+      linkBatches = batchLinks(links)
+      enterNodeBatches = []
+      enterLinkBatches = []
+    }
   }
 
-  function linkDistance(d: SimLink): number {
-    // Shorter with depth so files cluster around their folder.
-    return Math.max(12, 70 / Math.max(d.target.depth, 1)) + d.target.r
-  }
+  // --- Simulation ----------------------------------------------------------
 
   function ensureSimulation() {
     if (simulation) return simulation
 
     simulation = d3
       .forceSimulation<SimNode, SimLink>()
-      .force(
-        'link',
-        d3
-          .forceLink<SimNode, SimLink>()
-          .id((d) => d.key)
-          .distance(linkDistance)
-          .strength(0.7),
-      )
+      .force('link', d3.forceLink<SimNode, SimLink>().distance(linkDistance).strength(0.7))
       .force(
         'charge',
         d3
@@ -362,67 +205,37 @@ export function useDiagramRenderer(
           .theta(0.9),
       )
       .force('collide', d3.forceCollide<SimNode>((d) => d.r + 1.5).iterations(1))
-      .force('x', d3.forceX<SimNode>(() => centerX).strength(0.015))
-      .force('y', d3.forceY<SimNode>(() => centerY).strength(0.015))
+      .force('x', d3.forceX<SimNode>(centerX).strength(0.015))
+      .force('y', d3.forceY<SimNode>(centerY).strength(0.015))
       .velocityDecay(SIM_VELOCITY_DECAY)
       .alphaDecay(SIM_ALPHA_DECAY)
       .alphaMin(SIM_ALPHA_MIN)
-      .on('tick', onTick)
+      .on('tick', requestDraw)
 
     return simulation
   }
 
-  // Positions moved: picking index is stale and the canvas needs one repaint.
-  function onTick() {
-    quadtree = null
-    requestDraw()
+  // Forces snapshot their target at init, so a moved centre must be pushed to them.
+  function recenter(sim: d3.Simulation<SimNode, SimLink>) {
+    sim.force<d3.ForceX<SimNode>>('x')?.x(centerX)
+    sim.force<d3.ForceY<SimNode>>('y')?.y(centerY)
+    const root = graph.nodes[0]
+    if (root) {
+      root.fx = centerX
+      root.fy = centerY
+    }
   }
+
+  // --- Drawing -------------------------------------------------------------
 
   function requestDraw() {
     if (drawFrame !== null) return
     drawFrame = requestAnimationFrame(draw)
   }
 
-  function paintNodeBatch(c: CanvasRenderingContext2D, batch: SimNode[]) {
-    const first = batch[0]
-    c.beginPath()
-    for (const n of batch) {
-      c.moveTo((n.x ?? 0) + n.r, n.y ?? 0)
-      c.arc(n.x ?? 0, n.y ?? 0, n.r, 0, TAU)
-    }
-    c.fillStyle = first.fill
-    c.fill()
-    c.strokeStyle = first.stroke
-    c.lineWidth = first.rim
-    if (first.dashed) c.setLineDash([2, 2])
-    c.stroke()
-    if (first.dashed) c.setLineDash([])
-  }
-
-  // One pass per ramp step: the segments blend source color into target color.
-  function paintLinkBatch(c: CanvasRenderingContext2D, batch: LinkBatch) {
-    c.lineWidth = 1
-    for (let i = 0; i < LINK_SEGMENTS; i++) {
-      const t0 = i / LINK_SEGMENTS
-      const t1 = (i + 1) / LINK_SEGMENTS
-      c.beginPath()
-      for (const l of batch.links) {
-        const sx = l.source.x ?? 0
-        const sy = l.source.y ?? 0
-        const dx = (l.target.x ?? 0) - sx
-        const dy = (l.target.y ?? 0) - sy
-        c.moveTo(sx + dx * t0, sy + dy * t0)
-        c.lineTo(sx + dx * t1, sy + dy * t1)
-      }
-      c.strokeStyle = batch.ramp[i]
-      c.stroke()
-    }
-  }
-
   function draw() {
     drawFrame = null
-    const c = ctx
-    if (!c) return
+    if (!ctx) return
 
     const now = performance.now()
     const enterAlpha = entering
@@ -430,157 +243,51 @@ export function useDiagramRenderer(
       : 1
     // Fade done: fold the new bubbles into the main batches so they keep drawing.
     if (entering && enterAlpha >= 1) {
-      nodeBatches = batchNodes(nodes)
-      linkBatches = batchLinks(links)
+      nodeBatches = batchNodes(graph.nodes)
+      linkBatches = batchLinks(graph.links)
       enterNodeBatches = []
       enterLinkBatches = []
       entering = false
     }
 
-    const dpr = window.devicePixelRatio || 1
-    c.setTransform(dpr, 0, 0, dpr, 0, 0)
-    c.clearRect(0, 0, width, height)
-    c.translate(transform.x, transform.y)
-    c.scale(transform.k, transform.k)
-
-    c.globalAlpha = LINK_BASE_ALPHA
-    for (const batch of linkBatches) paintLinkBatch(c, batch)
-    if (enterAlpha < 1) {
-      c.globalAlpha = LINK_BASE_ALPHA * enterAlpha
-      for (const batch of enterLinkBatches) paintLinkBatch(c, batch)
-    }
-
-    c.globalAlpha = 1
-    for (const batch of nodeBatches) paintNodeBatch(c, batch)
-    if (enterAlpha < 1) {
-      c.globalAlpha = enterAlpha
-      for (const batch of enterNodeBatches) paintNodeBatch(c, batch)
-      c.globalAlpha = 1
-    }
-
-    if (moreNodes.length) {
-      c.fillStyle = '#d4d4d4'
-      c.font = '8px ui-monospace, monospace'
-      c.textAlign = 'center'
-      c.textBaseline = 'middle'
-      for (const n of moreNodes) c.fillText(n.data.name, n.x ?? 0, n.y ?? 0)
-    }
-
-    // Highlight is redrawn on top of its batch — one extra circle, no re-batch.
-    const focus = hovered ?? (externalKey ? (nodeByKey.get(externalKey) ?? null) : null)
+    const focusNode = hovered ?? (externalKey ? (nodeByKey.get(externalKey) ?? null) : null)
     let animating = false
-    if (focus) {
+    let focus: Scene['focus'] = null
+    if (focusNode) {
       const t = hovered ? Math.min(1, (now - hoverStart) / HOVER_MS) : 1
       animating = t < 1
       const eased = t * (2 - t)
-      const r = focus.r * (1 + (HOVER_SCALE - 1) * eased)
-
-      // Only one link is ever highlighted, so a real gradient is affordable here.
-      const link = linkByTarget.get(focus.key)
-      if (link) {
-        const sx = link.source.x ?? 0
-        const sy = link.source.y ?? 0
-        const tx = link.target.x ?? 0
-        const ty = link.target.y ?? 0
-        const grad = c.createLinearGradient(sx, sy, tx, ty)
-        grad.addColorStop(0, link.from)
-        grad.addColorStop(1, link.to)
-        c.beginPath()
-        c.moveTo(sx, sy)
-        c.lineTo(tx, ty)
-        c.strokeStyle = grad
-        c.lineWidth = 1.5
-        c.stroke()
-
-        // Repaint the parent so the line ends under it, not across its centre.
-        const src = link.source
-        c.beginPath()
-        c.moveTo(sx + src.r, sy)
-        c.arc(sx, sy, src.r, 0, TAU)
-        c.fillStyle = src.fill
-        c.fill()
-        c.strokeStyle = src.stroke
-        c.lineWidth = src.rim
-        c.stroke()
+      focus = {
+        node: focusNode,
+        r: focusNode.r * (1 + (HOVER_SCALE - 1) * eased),
+        link: graph.linkByTarget.get(focusNode.key),
       }
-
-      c.beginPath()
-      c.moveTo((focus.x ?? 0) + r, focus.y ?? 0)
-      c.arc(focus.x ?? 0, focus.y ?? 0, r, 0, TAU)
-      c.fillStyle = focus.fill
-      c.fill()
-      c.strokeStyle = focus.stroke
-      c.lineWidth = rimWidth(r)
-      c.stroke()
     }
 
-    c.setTransform(1, 0, 0, 1, 0, 0)
+    paintScene(
+      ctx,
+      { width, height, dpr: window.devicePixelRatio || 1, transform },
+      {
+        nodeBatches,
+        linkBatches,
+        enterNodeBatches,
+        enterLinkBatches,
+        enterAlpha,
+        moreNodes: graph.moreNodes,
+        focus,
+      },
+    )
+
     if (animating || entering) requestDraw()
   }
 
-  // Rebuilt lazily: ticks invalidate it far more often than the cursor uses it.
-  function getQuadtree(): d3.Quadtree<SimNode> {
-    if (!quadtree) {
-      quadtree = d3
-        .quadtree<SimNode>()
-        .x((d) => d.x ?? 0)
-        .y((d) => d.y ?? 0)
-        .addAll(nodes)
-    }
-    return quadtree
-  }
+  // --- Input ---------------------------------------------------------------
 
-  function pick(event: MouseEvent): SimNode | null {
-    if (!canvas || !nodes.length) return null
-    const [mx, my] = d3.pointer(event, canvas)
-    const [px, py] = transform.invert([mx, my])
-    const slack = HIT_RADIUS_PX / transform.k
-    // find() measures to the centre, so search wide and score by surface distance.
-    const reach = slack + maxNodeRadius
-    let best: SimNode | null = null
-    let bestScore = Infinity
-    getQuadtree().visit((quad, x0, y0, x1, y1) => {
-      if (!quad.length) {
-        let leaf: typeof quad | undefined = quad
-        do {
-          const node = leaf.data
-          const dx = (node.x ?? 0) - px
-          const dy = (node.y ?? 0) - py
-          const score = Math.sqrt(dx * dx + dy * dy) - node.r
-          if (score <= slack && score < bestScore) {
-            best = node
-            bestScore = score
-          }
-          leaf = leaf.next
-        } while (leaf)
-      }
-      return x0 > px + reach || x1 < px - reach || y0 > py + reach || y1 < py - reach
-    })
-    return (best as SimNode | null) ?? pickLink(px, py, slack)
-  }
-
-  /** Falls back to the links: hovering one lights up the node it feeds. */
-  function pickLink(px: number, py: number, slack: number): SimNode | null {
-    let best: SimNode | null = null
-    let bestDist = slack
-    for (const link of links) {
-      const sx = link.source.x ?? 0
-      const sy = link.source.y ?? 0
-      const tx = link.target.x ?? 0
-      const ty = link.target.y ?? 0
-      const dx = tx - sx
-      const dy = ty - sy
-      const len2 = dx * dx + dy * dy
-      const t = len2 ? Math.max(0, Math.min(1, ((px - sx) * dx + (py - sy) * dy) / len2)) : 0
-      const ox = px - (sx + t * dx)
-      const oy = py - (sy + t * dy)
-      const dist = Math.sqrt(ox * ox + oy * oy)
-      if (dist < bestDist) {
-        best = link.target
-        bestDist = dist
-      }
-    }
-    return best
+  function pick(clientX: number, clientY: number): SimNode | null {
+    if (!canvas || !graph.nodes.length) return null
+    const rect = canvas.getBoundingClientRect()
+    const [px, py] = transform.invert([clientX - rect.left, clientY - rect.top])
+    return pickAt(graph, px, py, HIT_RADIUS_PX / transform.k)
   }
 
   function setHovered(node: SimNode | null) {
@@ -592,28 +299,42 @@ export function useDiagramRenderer(
     requestDraw()
   }
 
+  // Pointer events can outrun frames; one pick per frame is all the eye needs.
+  function scheduleHover() {
+    if (hoverFrame !== null) return
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = null
+      if (!pointer) return
+      const node = pick(pointer.x, pointer.y)
+      setHovered(node)
+      if (node) showTooltip(pointer.x, pointer.y, node.data)
+    })
+  }
+
   function bindEvents(el: HTMLCanvasElement) {
     el.style.cursor = 'pointer'
 
     el.addEventListener('mousemove', (event) => {
-      const node = pick(event)
-      setHovered(node)
-      if (node) showTooltip(event.clientX, event.clientY, node.data)
+      pointer = { x: event.clientX, y: event.clientY }
+      scheduleHover()
     })
 
-    el.addEventListener('mouseleave', () => setHovered(null))
+    el.addEventListener('mouseleave', () => {
+      pointer = null
+      setHovered(null)
+    })
 
     el.addEventListener('click', (event) => {
-      const node = pick(event)
+      const node = pick(event.clientX, event.clientY)
       if (!node) return
       event.stopPropagation()
 
       // A 'more' bubble expands its folder, and stays expanded across snapshots.
       if (node.data.type === 'more') {
-        expandedFolders.add(node.parentKey ?? '')
+        const folder = node.parentKey ? nodeByKey.get(node.parentKey) : null
+        expandedFolders.add(folder?.data.path ?? '')
         expandedVersion++
         setHovered(null)
-        hideTooltip()
         updateTree()
         return
       }
@@ -623,39 +344,46 @@ export function useDiagramRenderer(
     })
   }
 
-  function resizeCanvas() {
-    if (!canvas) return
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(width * dpr)
-    canvas.height = Math.round(height * dpr)
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
-  }
+  // --- Layout --------------------------------------------------------------
 
   function measure() {
-    const el = diagramContainer.value
+    const el = container.value
     width = el?.clientWidth || DIAGRAM.DEFAULT_WIDTH
-    height = resolveHeight(el)
+    height = expanded?.value && el?.clientHeight ? el.clientHeight : DIAGRAM.HEIGHT
     centerX = width / 2
     centerY = height / 2
   }
 
+  // Assigning canvas.width wipes the bitmap even when unchanged, so only touch it on a real change.
+  function resizeCanvas() {
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    const w = Math.round(width * dpr)
+    const h = Math.round(height * dpr)
+    if (canvas.width === w && canvas.height === h) return
+    canvas.width = w
+    canvas.height = h
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+  }
+
   function render() {
-    buildGraph()
-    if (!nodes.length) return
+    rebuildGraph()
+    if (!graph.nodes.length) return
 
     const sim = ensureSimulation()
-    sim.nodes(nodes)
-    sim.force<d3.ForceLink<SimNode, SimLink>>('link')?.links(links)
+    recenter(sim)
+    sim.nodes(graph.nodes)
+    sim.force<d3.ForceLink<SimNode, SimLink>>('link')?.links(graph.links)
     sim.alpha(SIM_RESTART_ALPHA).restart()
     requestDraw()
   }
 
   function initGource() {
-    if (!diagramContainer.value || !fileTree.value) return
+    if (!container.value || !fileTree.value) return
 
-    const container = diagramContainer.value
-    d3.select(container).selectAll('*').remove()
+    const host = container.value
+    d3.select(host).selectAll('*').remove()
     nodeByKey.clear()
     transform = d3.zoomIdentity
     hovered = null
@@ -664,7 +392,7 @@ export function useDiagramRenderer(
     measure()
 
     const sel = d3
-      .select(container)
+      .select(host)
       .append('canvas')
       .style('display', 'block')
       .style('touch-action', 'none')
@@ -688,25 +416,40 @@ export function useDiagramRenderer(
   }
 
   function retryInitGource(attempts = 0) {
-    if (!diagramContainer.value || !fileTree.value) return
-    if (diagramContainer.value.clientWidth === 0 && attempts < 10) {
+    if (!container.value || !fileTree.value) return
+    if (container.value.clientWidth === 0 && attempts < 10) {
       requestAnimationFrame(() => retryInitGource(attempts + 1))
       return
     }
     initGource()
   }
 
+  /** The tree changed (snapshot, legend, expanded folder): rebuild bodies and reheat. */
   function updateTree() {
-    if (!diagramContainer.value) return
+    if (!container.value) return
     if (!canvas) {
       initGource()
       return
     }
-
     measure()
     resizeCanvas()
     render()
   }
+
+  /** The container changed size: keep the bodies, just drift them to the new centre. */
+  function resize() {
+    if (!canvas) return
+    measure()
+    resizeCanvas()
+    if (!simulation || !graph.nodes.length) {
+      requestDraw()
+      return
+    }
+    recenter(simulation)
+    simulation.alpha(Math.max(simulation.alpha(), SIM_RESIZE_ALPHA)).restart()
+  }
+
+  // --- External highlight / zoom -------------------------------------------
 
   function highlightByPath(path: string) {
     externalKey = path
@@ -721,19 +464,16 @@ export function useDiagramRenderer(
 
   function zoomToPath(path: string) {
     if (!canvasSel || !zoomBehavior) return
-
     const target = nodeByKey.get(path)
-    if (!target || target.x === undefined || target.y === undefined) return
+    if (!target) return
 
-    const scale = 2.5
-    const tx = width / 2 - target.x * scale
-    const ty = height / 2 - target.y * scale
-
+    const tx = width / 2 - target.x * ZOOM_TO_SCALE
+    const ty = height / 2 - target.y * ZOOM_TO_SCALE
     canvasSel
       .transition()
-      .duration(700)
+      .duration(ZOOM_TO_MS)
       .ease(d3.easeCubicInOut)
-      .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+      .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(ZOOM_TO_SCALE))
   }
 
   /** Stops the simulation loop — the component must call this on unmount. */
@@ -742,16 +482,19 @@ export function useDiagramRenderer(
     simulation = null
     if (drawFrame !== null) cancelAnimationFrame(drawFrame)
     drawFrame = null
+    if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
+    hoverFrame = null
+    pointer = null
+    hovered = null
+    externalKey = null
     nodeByKey.clear()
-    linkByTarget.clear()
-    nodes = []
-    links = []
-    moreNodes = []
+    expandedFolders.clear()
+    graph = emptyGraph()
     nodeBatches = []
     linkBatches = []
     enterNodeBatches = []
     enterLinkBatches = []
-    quadtree = null
+    entering = false
     collapsed = null
     canvas = null
     canvasSel = null
@@ -763,6 +506,7 @@ export function useDiagramRenderer(
     initGource,
     retryInitGource,
     updateTree,
+    resize,
     highlightByPath,
     unhighlightByPath,
     zoomToPath,

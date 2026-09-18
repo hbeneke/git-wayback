@@ -440,6 +440,7 @@ import type {
 } from '~/composables/useDiagramTree'
 import type { EvolutionMode } from '@git-wayback/shared'
 import { EXTENSION_COLORS, buildTree } from '~/composables/useDiagramTree'
+import type { DiagramTooltip } from '~/composables/useDiagramRenderer'
 
 const props = withDefaults(
   defineProps<{
@@ -490,7 +491,7 @@ const expanded = ref(false)
 const headerCollapsed = useHeaderCollapsed()
 const headerOffset = ref(56)
 // Shallow: rewritten wholesale on every mousemove.
-const tooltip = shallowRef<{ visible: boolean; x: number; y: number; name: string; dir: string; kind: string }>({
+const tooltip = shallowRef<DiagramTooltip>({
   visible: false, x: 0, y: 0, name: '', dir: '', kind: '',
 })
 
@@ -536,10 +537,15 @@ function seekTo(i: number) {
   currentIndex.value = i
 }
 // Renderer shares this tree instead of rebuilding it — one buildTree per snapshot.
-const { collapsedFiles, initGource, retryInitGource, updateTree, highlightByPath, unhighlightByPath, zoomToPath, destroyRenderer } = useDiagramRenderer(
-  diagramContainer, fileTreeRoot, hiddenExtensions, tooltip, hoveredGraphPath,
-  onGraphNodeClick, expanded,
-)
+const { collapsedFiles, initGource, retryInitGource, updateTree, resize, highlightByPath, unhighlightByPath, zoomToPath, destroyRenderer } = useDiagramRenderer({
+  container: diagramContainer,
+  fileTree: fileTreeRoot,
+  hiddenExtensions,
+  tooltip,
+  hoveredGraphPath,
+  onNodeClick: onGraphNodeClick,
+  expanded,
+})
 
 async function onGraphNodeClick(path: string) {
   if (!path) return
@@ -666,15 +672,14 @@ function reconfigure() {
 
 function toggleExpand() {
   expanded.value = !expanded.value
-  // Resize the radial layout to the new container size (ResizeObserver also
-  // fires, but call directly so it snaps without the debounce delay).
-  nextTick(() => updateTree())
+  // ResizeObserver also fires, but call directly so it snaps without the debounce delay.
+  nextTick(() => resize())
 }
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && expanded.value) {
     expanded.value = false
-    nextTick(() => updateTree())
+    nextTick(() => resize())
   }
 }
 
@@ -714,15 +719,12 @@ watch(currentIndex, () => {
   scheduleRedraw()
 })
 
-// Debounce resize redraws and avoid the full rebuild path — updateTree reuses
-// the existing svg/groups and just re-runs the radial layout for the new size.
+// Debounced: a resize keeps the bodies and only drifts them to the new centre.
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 const resizeObserver = new ResizeObserver(() => {
   if (resizeTimer) clearTimeout(resizeTimer)
   resizeTimer = setTimeout(() => {
-    if (snapshots.value.length > 0 && !loading.value) {
-      updateTree()
-    }
+    if (snapshots.value.length > 0 && !loading.value) resize()
   }, 150)
 })
 
