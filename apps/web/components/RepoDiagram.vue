@@ -315,6 +315,41 @@
             </div>
           </div>
 
+          <!-- Snapshot mode leaves the control strip free: use it to say the
+               timeline exists, since the banner lands here directly. -->
+          <div
+            v-if="!hasTimeline && !isHistory"
+            class="absolute inset-x-0 bottom-0 z-20 px-4 py-3 border-t border-[rgb(var(--border))] backdrop-blur-sm flex items-center justify-between gap-4"
+          >
+            <div class="min-w-0">
+              <p class="text-xs text-fg font-semibold">You are seeing a single snapshot</p>
+              <p class="text-[11px] text-[rgb(var(--muted))] truncate">
+                Play {{ limit }} {{ source }} ({{ sampling }}) to watch this repository grow file by file.
+              </p>
+            </div>
+            <div class="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 py-1.5 px-3 text-xs font-semibold rounded border border-primary text-primary bg-bg/60 cursor-pointer transition-colors hover:bg-primary hover:text-[rgb(var(--bg))]"
+                :title="`Play ${limit} ${source}, ${sampling}`"
+                @click="playHistory"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                Play the evolution
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center py-1.5 px-2.5 text-xs rounded border border-[rgb(var(--border))] text-[rgb(var(--muted))] bg-transparent cursor-pointer transition-colors hover:text-primary hover:border-primary"
+                title="Pick source, versions and sampling first"
+                @click="configureHistory"
+              >
+                Options
+              </button>
+            </div>
+          </div>
+
           <!-- Controls float over the graph, unpainted, so the blur has something behind it. -->
           <div
             v-if="hasTimeline"
@@ -596,6 +631,19 @@ watch(
     start()
   }
 )
+
+// Same jump, but stopping at the config screen so the run can be tuned.
+function configureHistory() {
+  mode.value = 'history'
+  reconfigure()
+}
+
+// Snapshot -> history: reload with a real timeline and roll it straight away.
+async function playHistory() {
+  mode.value = 'history'
+  await start()
+  if (snapshots.value.length > 1) startPlayback()
+}
 
 async function start() {
   started.value = true
