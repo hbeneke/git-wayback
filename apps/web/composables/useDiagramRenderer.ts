@@ -24,8 +24,12 @@ const SIM_RESTART_ALPHA = 0.55
 const SIM_RESIZE_ALPHA = 0.1
 /** A first layout has nothing to grow from, so it gets a full reheat. */
 const SIM_FIRST_ALPHA = 1
+/** Slower cooling for a first layout: the fast one freezes it before it spreads. */
+const SIM_FIRST_ALPHA_DECAY = 0.01
+/** Less friction too, so the charge can actually open the clusters up. */
+const SIM_FIRST_VELOCITY_DECAY = 0.3
 /** Synchronous ticks before the first paint, capped in time for big repos. */
-const SIM_WARMUP_TICKS = 120
+const SIM_WARMUP_TICKS = 300
 const SIM_WARMUP_BUDGET_MS = 60
 
 export interface DiagramTooltip {
@@ -382,14 +386,23 @@ export function useDiagramRenderer(opts: DiagramRendererOptions) {
 
     // Every body new: settle off-screen first so the graph never shows as a pile.
     if (graph.fresh.length === graph.nodes.length) {
-      sim.stop().alpha(SIM_FIRST_ALPHA)
+      sim
+        .stop()
+        .alpha(SIM_FIRST_ALPHA)
+        .alphaDecay(SIM_FIRST_ALPHA_DECAY)
+        .velocityDecay(SIM_FIRST_VELOCITY_DECAY)
       const t0 = performance.now()
       for (let i = 0; i < SIM_WARMUP_TICKS && performance.now() - t0 < SIM_WARMUP_BUDGET_MS; i++) {
         sim.tick()
       }
       sim.restart()
     } else {
-      sim.alpha(SIM_RESTART_ALPHA).restart()
+      // Back to fast cooling so playback settles within its interval.
+      sim
+        .alphaDecay(SIM_ALPHA_DECAY)
+        .velocityDecay(SIM_VELOCITY_DECAY)
+        .alpha(SIM_RESTART_ALPHA)
+        .restart()
     }
     requestDraw()
   }
