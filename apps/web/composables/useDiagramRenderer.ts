@@ -1,7 +1,7 @@
 import { D3_EXIT_TRANSITION_DURATION_MS, DIAGRAM } from '@git-wayback/shared'
 import * as d3 from 'd3'
 import type { Graph, LinkBatch, SimLink, SimNode } from './diagram/graph'
-import { batchLinks, batchNodes, buildGraph, pickAt } from './diagram/graph'
+import { batchLinks, batchNodes, buildGraph, pickAt, restLength } from './diagram/graph'
 import type { Scene } from './diagram/paint'
 import { paintScene } from './diagram/paint'
 import type { TreeNode } from './useDiagramTree'
@@ -22,6 +22,11 @@ const SIM_VELOCITY_DECAY = 0.45
 const SIM_RESTART_ALPHA = 0.55
 /** Alpha after a resize: enough to drift to the new centre, not to reshuffle. */
 const SIM_RESIZE_ALPHA = 0.1
+/** A first layout has nothing to grow from, so it gets a full reheat. */
+const SIM_FIRST_ALPHA = 1
+/** Synchronous ticks before the first paint, capped in time for big repos. */
+const SIM_WARMUP_TICKS = 120
+const SIM_WARMUP_BUDGET_MS = 60
 
 export interface DiagramTooltip {
   visible: boolean
@@ -58,8 +63,7 @@ function emptyGraph(): Graph {
 }
 
 function linkDistance(d: SimLink): number {
-  // Shorter with depth so files cluster around their folder.
-  return Math.max(12, 70 / Math.max(d.target.depth, 1)) + d.target.r
+  return restLength(d.target.depth, d.target.r)
 }
 
 export function useDiagramRenderer(opts: DiagramRendererOptions) {
@@ -375,7 +379,18 @@ export function useDiagramRenderer(opts: DiagramRendererOptions) {
     recenter(sim)
     sim.nodes(graph.nodes)
     sim.force<d3.ForceLink<SimNode, SimLink>>('link')?.links(graph.links)
-    sim.alpha(SIM_RESTART_ALPHA).restart()
+
+    // Every body new: settle off-screen first so the graph never shows as a pile.
+    if (graph.fresh.length === graph.nodes.length) {
+      sim.stop().alpha(SIM_FIRST_ALPHA)
+      const t0 = performance.now()
+      for (let i = 0; i < SIM_WARMUP_TICKS && performance.now() - t0 < SIM_WARMUP_BUDGET_MS; i++) {
+        sim.tick()
+      }
+      sim.restart()
+    } else {
+      sim.alpha(SIM_RESTART_ALPHA).restart()
+    }
     requestDraw()
   }
 

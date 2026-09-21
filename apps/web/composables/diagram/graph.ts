@@ -25,6 +25,8 @@ const MORE_MIN_RADIUS = 6
 const MORE_MAX_RADIUS = 12
 /** Spread of new bubbles around their parent so they push outwards. */
 const SPAWN_JITTER = 20
+/** Angle a fresh subtree fans across, around its parent's outward direction. */
+const SPAWN_FAN = Math.PI * 0.9
 
 const FOLDER_FILL = 'rgb(18, 87, 67)'
 const MORE_FILL = 'rgba(107, 114, 128, 0.35)'
@@ -153,6 +155,41 @@ export function batchLinks(list: SimLink[]): LinkBatch[] {
   return [...byPair.values()]
 }
 
+/** Resting parent-child distance; the link force and the spawn seed share it. */
+export function restLength(depth: number, r: number): number {
+  // Shorter with depth so files cluster around their folder.
+  return Math.max(12, 70 / Math.max(depth, 1)) + r
+}
+
+/**
+ * A child of a settled parent sprouts right next to it, so the graph grows.
+ * A child of a parent that is itself new (first build) is placed at rest length,
+ * fanned outwards, so the first layout does not start as one overlapping blob.
+ */
+function spawnPoint(
+  parent: SimNode | null,
+  parentIsFresh: boolean,
+  depth: number,
+  r: number,
+  centerX: number,
+  centerY: number,
+): { x: number; y: number } {
+  const px = parent?.x ?? centerX
+  const py = parent?.y ?? centerY
+  if (!parent || !parentIsFresh) {
+    return {
+      x: px + (Math.random() - 0.5) * SPAWN_JITTER,
+      y: py + (Math.random() - 0.5) * SPAWN_JITTER,
+    }
+  }
+  // The root's children spread all round; deeper ones keep heading outwards.
+  const angle = parent.depth === 0
+    ? Math.random() * Math.PI * 2
+    : Math.atan2(py - centerY, px - centerX) + (Math.random() - 0.5) * SPAWN_FAN
+  const dist = restLength(depth, r) * (0.8 + Math.random() * 0.4)
+  return { x: px + Math.cos(angle) * dist, y: py + Math.sin(angle) * dist }
+}
+
 /** Rebuilds nodes/links for a snapshot tree, reusing surviving bodies from `nodeByKey`. */
 export function buildGraph(opts: BuildGraphOptions): Graph {
   const { tree, nodeByKey, hiddenExtensions, centerX, centerY } = opts
@@ -182,6 +219,10 @@ export function buildGraph(opts: BuildGraphOptions): Graph {
     let node = nodeByKey.get(key)
     if (!node) {
       const parent = parentKey ? nodeByKey.get(parentKey) : null
+      const parentIsFresh = parentKey ? freshKeys.has(parentKey) : false
+      const { x, y } = spawnPoint(
+        parent ?? null, parentIsFresh, depth, nodeRadius(data, depth), centerX, centerY,
+      )
       node = {
         key,
         data,
@@ -193,8 +234,8 @@ export function buildGraph(opts: BuildGraphOptions): Graph {
         dashed: data.type === 'more',
         rim: 0.5,
         style: '',
-        x: (parent?.x ?? centerX) + (Math.random() - 0.5) * SPAWN_JITTER,
-        y: (parent?.y ?? centerY) + (Math.random() - 0.5) * SPAWN_JITTER,
+        x,
+        y,
       }
       nodeByKey.set(key, node)
       fresh.push(node)
