@@ -176,7 +176,7 @@
               type="button"
               class="w-4 h-4 rounded-sm inline-flex items-center justify-center text-[rgb(var(--muted))] bg-transparent border-0 cursor-pointer transition-colors hover:text-primary hover:bg-[rgb(var(--border)/0.5)]"
               :aria-label="expanded ? 'Collapse view' : 'Expand view'"
-              :title="expanded ? 'Collapse (Esc)' : 'Expand'"
+              :title="expanded ? 'Collapse (F / Esc)' : 'Expand (F)'"
               @click="toggleExpand"
             >
               <svg v-if="!expanded" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -228,6 +228,26 @@
               <span class="text-[rgb(var(--muted))]">{{ tooltip.dir }}<span class="text-[rgb(var(--foreground))] font-semibold">{{ tooltip.name }}</span></span>
               <span class="text-primary text-[10px]">{{ tooltip.kind }}</span>
             </div>
+
+            <!-- First-run hint pointing at fullscreen -->
+            <Transition
+              enter-active-class="transition-all duration-300 ease-out"
+              enter-from-class="opacity-0 -translate-y-1"
+              leave-active-class="transition-opacity duration-300"
+              leave-to-class="opacity-0"
+            >
+              <div
+                v-if="showExpandHint"
+                class="absolute top-3 left-1/2 -translate-x-1/2 z-[22] flex items-center gap-2 py-1.5 px-3 rounded border border-primary/60 bg-bg/90 backdrop-blur text-[11px] text-fg whitespace-nowrap cursor-pointer"
+                role="status"
+                @pointerdown.stop
+                @click.stop="showExpandHint = false"
+              >
+                <span>Press</span>
+                <kbd class="text-[10px] leading-none px-1 py-0.5 rounded border border-[rgb(var(--border))] font-mono text-primary">F</kbd>
+                <span>for fullscreen</span>
+              </div>
+            </Transition>
 
             <!-- Expanded tag message overlay -->
             <div
@@ -347,6 +367,7 @@
               >
                 Options
               </button>
+              <DiagramExpandButton :expanded="expanded" @toggle="toggleExpand" />
             </div>
           </div>
 
@@ -393,11 +414,18 @@
               <span class="text-xs text-[rgb(var(--muted))] min-w-[50px] text-right">
                 {{ currentIndex + 1 }}/{{ snapshots.length }}
               </span>
+
+              <DiagramExpandButton :expanded="expanded" @toggle="toggleExpand" />
             </div>
             <div class="flex justify-between mt-1.5 text-[10px] text-[rgb(var(--muted))]">
               <span>{{ snapshots[0]?.tag }}</span>
               <span>{{ snapshots[snapshots.length - 1]?.tag }}</span>
             </div>
+          </div>
+
+          <!-- No control strip (history that found a single snapshot): float it alone. -->
+          <div v-if="!hasTimeline && isHistory" class="absolute bottom-3 right-3 z-20">
+            <DiagramExpandButton :expanded="expanded" @toggle="toggleExpand" />
           </div>
 
           <!-- Play poster: frosted, over the controls, like a video before it starts.
@@ -488,6 +516,7 @@ const hiddenExtensions = ref<Set<string>>(new Set())
 const hoveredIndex = ref<number | null>(null)
 const messageExpanded = ref(false)
 const expanded = ref(false)
+const showExpandHint = ref(false)
 const headerCollapsed = useHeaderCollapsed()
 const headerOffset = ref(56)
 // Shallow: rewritten wholesale on every mousemove.
@@ -660,6 +689,9 @@ async function start() {
 // Back to the config screen, keeping current selections
 function reconfigure() {
   stopPlay()
+  // The config screen is not a fullscreen view; leaving it on locks page scroll.
+  expanded.value = false
+  showExpandHint.value = false
   // The canvas is torn down with the view; stop the simulation so it does not
   // keep ticking against detached nodes.
   destroyRenderer()
@@ -672,16 +704,57 @@ function reconfigure() {
 
 function toggleExpand() {
   expanded.value = !expanded.value
+  markExpandHintSeen()
   // ResizeObserver also fires, but call directly so it snaps without the debounce delay.
   nextTick(() => resize())
+}
+
+const canvasReady = computed(() => started.value && !loading.value && !error.value && snapshots.value.length > 0)
+
+function isTypingTarget(el: EventTarget | null) {
+  if (!(el instanceof HTMLElement)) return false
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
 }
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && expanded.value) {
     expanded.value = false
     nextTick(() => resize())
+    return
+  }
+  if (
+    (e.key === 'f' || e.key === 'F')
+    && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey
+    && canvasReady.value && !isTypingTarget(e.target)
+  ) {
+    e.preventDefault()
+    toggleExpand()
   }
 }
+
+// First-run hint: once per browser, shown when the graph is first on screen.
+const EXPAND_HINT_KEY = 'gw:expand-hint-seen'
+let expandHintTimer: ReturnType<typeof setTimeout> | null = null
+
+function expandHintSeen() {
+  try { return localStorage.getItem(EXPAND_HINT_KEY) === '1' } catch { return true }
+}
+
+function markExpandHintSeen() {
+  showExpandHint.value = false
+  try { localStorage.setItem(EXPAND_HINT_KEY, '1') } catch {}
+}
+
+watch(
+  () => canvasReady.value && !showCenterPlay.value,
+  (visible) => {
+    if (!visible || expanded.value || expandHintSeen()) return
+    markExpandHintSeen()
+    showExpandHint.value = true
+    if (expandHintTimer) clearTimeout(expandHintTimer)
+    expandHintTimer = setTimeout(() => { showExpandHint.value = false }, 4000)
+  }
+)
 
 watch(expanded, (v) => {
   // Expanded is meant to hand the graph every pixel, so the header collapses too.
@@ -755,6 +828,7 @@ onUnmounted(() => {
   resizeObserver.disconnect()
   if (resizeTimer) clearTimeout(resizeTimer)
   if (redrawFrame !== null) cancelAnimationFrame(redrawFrame)
+  if (expandHintTimer) clearTimeout(expandHintTimer)
   window.removeEventListener('keydown', onKeydown)
   if (typeof document !== 'undefined') document.body.style.overflow = ''
   stopPlay()
