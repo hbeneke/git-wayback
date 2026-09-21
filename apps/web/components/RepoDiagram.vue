@@ -320,18 +320,38 @@
                   </svg>
                 </button>
               </div>
-              <div v-if="legendPanelOpen" class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
-                <button
-                  v-for="(color, ext) in EXTENSION_COLORS"
-                  :key="ext"
-                  @click="toggleExtension(ext as string)"
-                  class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
-                  :class="{ 'opacity-30': hiddenExtensions.has(ext as string) }"
-                >
-                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: hiddenExtensions.has(ext as string) ? 'rgb(var(--muted))' : color }" />
-                  <span class="text-[10px] text-[rgb(var(--foreground))]">.{{ ext }}</span>
-                </button>
-              </div>
+              <template v-if="legendPanelOpen">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
+                  <button
+                    v-for="entry in legendEntries"
+                    :key="entry.key"
+                    @click="toggleExtension(entry.key)"
+                    class="flex items-center gap-1.5 px-1 py-0.5 rounded text-left transition-opacity"
+                    :class="{ 'opacity-30': hiddenExtensions.has(entry.key) }"
+                    :title="`${entry.count} ${entry.count === 1 ? 'file' : 'files'} — click to ${hiddenExtensions.has(entry.key) ? 'show' : 'hide'}`"
+                  >
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: hiddenExtensions.has(entry.key) ? 'rgb(var(--muted))' : entry.color }" />
+                    <span class="text-[10px] text-[rgb(var(--foreground))]">{{ entry.label }}</span>
+                    <span class="ml-auto text-[10px] tabular-nums text-[rgb(var(--muted))]">{{ entry.count }}</span>
+                  </button>
+                </div>
+
+                <!-- Structure keys: shapes, not file types, so they cannot be filtered. -->
+                <div class="flex flex-col gap-1 mt-2 pt-2 border-t border-[rgb(var(--border))] px-1">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: ROOT_COLOR }" />
+                    <span class="text-[10px] text-[rgb(var(--muted))]">root</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 border" :style="{ borderColor: FOLDER_COLOR }" />
+                    <span class="text-[10px] text-[rgb(var(--muted))]">folder</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 border border-dashed border-[#6b7280] bg-[rgba(107,114,128,0.35)]" />
+                    <span class="text-[10px] text-[rgb(var(--muted))]">+N grouped files</span>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -467,7 +487,14 @@ import type {
   EvolutionSampling,
 } from '~/composables/useDiagramTree'
 import type { EvolutionMode } from '@git-wayback/shared'
-import { EXTENSION_COLORS, buildTree } from '~/composables/useDiagramTree'
+import {
+  EXTENSION_COLORS,
+  FOLDER_COLOR,
+  ROOT_COLOR,
+  buildTree,
+  extensionKey,
+  isGroupKey,
+} from '~/composables/useDiagramTree'
 import type { DiagramTooltip } from '~/composables/useDiagramRenderer'
 
 const props = withDefaults(
@@ -537,6 +564,27 @@ const legendPanelOpen = ref(true)
 const openFolders = ref<Set<string>>(new Set())
 const hoveredFilePath = ref<string | null>(null)
 const hoveredGraphPath = ref<string | null>(null)
+
+// Legend lists what this snapshot holds, busiest first; 'other' always last.
+// Hidden keys stay listed so a filter can be undone after they leave.
+const legendEntries = computed(() => {
+  const counts = new Map<string, number>()
+  for (const f of currentSnapshot.value?.files ?? []) {
+    const key = extensionKey(f.extension)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  for (const key of hiddenExtensions.value) {
+    if (!counts.has(key)) counts.set(key, 0)
+  }
+  return [...counts.entries()]
+    .sort(([a, ca], [b, cb]) => (a === 'other' ? 1 : b === 'other' ? -1 : cb - ca))
+    .map(([key, count]) => ({
+      key,
+      count,
+      color: EXTENSION_COLORS[key],
+      label: isGroupKey(key) ? key : `.${key}`,
+    }))
+})
 
 const fileTreeRoot = computed(() => {
   if (!currentSnapshot.value) return null

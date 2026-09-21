@@ -61,7 +61,27 @@ export const EXTENSION_COLORS: Record<string, string> = {
   rs: '#dea584',
   yaml: '#cb171e',
   sh: '#89e051',
+  images: '#d946ef',
   other: '#6b7280',
+}
+
+/** Extensions folded into one legend entry, so a family does not flood the legend. */
+const EXTENSION_GROUPS: Record<string, string> = {
+  png: 'images',
+  jpg: 'images',
+  jpeg: 'images',
+  gif: 'images',
+  svg: 'images',
+  webp: 'images',
+  ico: 'images',
+  avif: 'images',
+  bmp: 'images',
+}
+
+/** Legend keys that name a group rather than an extension, so they get no leading dot. */
+const GROUP_KEYS = new Set(['other', ...Object.values(EXTENSION_GROUPS)])
+export function isGroupKey(key: string): boolean {
+  return GROUP_KEYS.has(key)
 }
 
 const FILE_KINDS: Record<string, string> = {
@@ -199,12 +219,16 @@ export function collapseTree(
   return collapseNode(root, perFolder, keepExpanded)
 }
 
-export const FOLDER_COLOR = 'rgb(16, 185, 129)'
+// Folders are structure, not a file type: neutral, so no language shares their hue.
+export const FOLDER_COLOR = 'rgb(156, 163, 175)'
+/** The repo root keeps the brand color as the graph's anchor. */
+export const ROOT_COLOR = 'rgb(16, 185, 129)'
 
-/** Legend key for an extension: its own entry when the palette has one, else 'other'. */
+/** Legend key for an extension: its group, its own entry when the palette has one, else 'other'. */
 export function extensionKey(ext: string | null | undefined): string {
   const lower = ext?.toLowerCase()
-  return lower && EXTENSION_COLORS[lower] ? lower : 'other'
+  const key = lower ? (EXTENSION_GROUPS[lower] ?? lower) : null
+  return key && EXTENSION_COLORS[key] ? key : 'other'
 }
 
 export function getExtensionColor(ext: string | null | undefined): string {

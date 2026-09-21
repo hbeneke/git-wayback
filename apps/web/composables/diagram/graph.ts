@@ -7,6 +7,7 @@ import {
   getExtensionColor,
   getNodeColor,
   mixColors,
+  ROOT_COLOR,
 } from '../useDiagramTree'
 
 /** Root has an empty path, so it gets a key no file or folder can collide with. */
@@ -28,7 +29,10 @@ const SPAWN_JITTER = 20
 /** Angle a fresh subtree fans across, around its parent's outward direction. */
 const SPAWN_FAN = Math.PI * 0.9
 
-const FOLDER_FILL = 'rgb(18, 87, 67)'
+/** Near the canvas background, so folders read as hollow rings. */
+const FOLDER_FILL = 'rgb(22, 23, 28)'
+/** Hollow rings need a firmer rim than filled bubbles to stay visible. */
+const FOLDER_RIM = 1
 const MORE_FILL = 'rgba(107, 114, 128, 0.35)'
 
 export interface SimNode extends SimulationNodeDatum {
@@ -101,7 +105,7 @@ function nodeRadius(data: TreeNode, depth: number): number {
 }
 
 function fillFor(data: TreeNode, depth: number): string {
-  if (data.type === 'folder') return depth === 0 ? FOLDER_COLOR : FOLDER_FILL
+  if (data.type === 'folder') return depth === 0 ? ROOT_COLOR : FOLDER_FILL
   if (data.type === 'more') return MORE_FILL
   return getExtensionColor(data.extension)
 }
@@ -115,6 +119,12 @@ function strokeFor(color: string): string {
     strokeCache.set(color, s)
   }
   return s
+}
+
+// Folder rings carry the neutral color itself; darkened it would vanish on the canvas.
+function rimColorFor(data: TreeNode, depth: number): string {
+  if (data.type === 'folder') return depth === 0 ? strokeFor(ROOT_COLOR) : FOLDER_COLOR
+  return strokeFor(getNodeColor(data))
 }
 
 function isHidden(data: TreeNode, hiddenExtensions: Set<string>): boolean {
@@ -230,7 +240,7 @@ export function buildGraph(opts: BuildGraphOptions): Graph {
         r: 1,
         parentKey,
         fill: fillFor(data, depth),
-        stroke: strokeFor(getNodeColor(data)),
+        stroke: rimColorFor(data, depth),
         dashed: data.type === 'more',
         rim: 0.5,
         style: '',
@@ -246,7 +256,7 @@ export function buildGraph(opts: BuildGraphOptions): Graph {
     node.parentKey = parentKey
     // Radius tracks file size and 'more' counts, so the rim follows it.
     node.r = nodeRadius(data, depth)
-    node.rim = rimWidth(node.r)
+    node.rim = data.type === 'folder' && depth > 0 ? FOLDER_RIM : rimWidth(node.r)
     node.style = `${node.fill}|${node.stroke}|${node.dashed ? 1 : 0}|${node.rim}`
     nodes.push(node)
     if (node.r > maxNodeRadius) maxNodeRadius = node.r
